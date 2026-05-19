@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nicknews"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "requests",
+    "apscheduler",
+    "python-dotenv",
+    "yfinance",
+    "feedparser",
+]
+
+[project.scripts]
+nicknews = "nicknews.bot:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

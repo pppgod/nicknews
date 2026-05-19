@@ -1,12 +1,13 @@
+import html
 import os
 import time
 import requests
 from datetime import datetime
 from dotenv import load_dotenv
 
-from storage import load_stocks, save_stocks
-from news import fetch_rss, fetch_keyword_news, format_section, TECH_FEEDS, ECONOMY_FEEDS
-from stocks import search_ticker, get_market, get_stock_line
+from .storage import load_stocks, save_stocks
+from .news import fetch_rss, fetch_keyword_news, format_section, TECH_FEEDS, ECONOMY_FEEDS
+from .stocks import search_ticker, get_market, get_stock_line
 
 load_dotenv()
 
@@ -34,7 +35,7 @@ def send_daily_news():
     interest_sections = []
     for keyword in load_stocks()["keywords"]:
         articles = fetch_keyword_news(keyword, 3)
-        interest_sections.append(format_section(articles, f"🔍 <b>{keyword}</b>"))
+        interest_sections.append(format_section(articles, f"🔍 <b>{html.escape(keyword)}</b>"))
 
     parts = [
         f"📰 <b>{today} 데일리 뉴스</b>",
@@ -80,10 +81,10 @@ def cmd_add(parts):
         send_message("사용법: /add <티커 또는 회사명>\n예) /add 삼성전자\n예) /add AAPL")
         return
     query = " ".join(parts[1:])
-    send_message(f"🔍 {query} 조회 중...")
+    send_message(f"🔍 {html.escape(query)} 조회 중...")
     ticker, name = search_ticker(query)
     if ticker is None:
-        send_message(f"❌ 종목을 찾을 수 없습니다: {query}")
+        send_message(f"❌ 종목을 찾을 수 없습니다: {html.escape(query)}")
         return
     market = get_market(ticker)
     data = load_stocks()
@@ -93,7 +94,7 @@ def cmd_add(parts):
     market_label = "🇰🇷 한국" if market == "kr" else "🇺🇸 미국"
     data[market].append({"name": name, "ticker": ticker})
     save_stocks(data)
-    send_message(f"✅ {market_label} 주식 추가: <b>{name}</b> ({ticker})")
+    send_message(f"✅ {market_label} 주식 추가: <b>{html.escape(name)}</b> ({html.escape(ticker)})")
 
 
 def cmd_remove(parts):
@@ -106,10 +107,10 @@ def cmd_remove(parts):
     data["kr"] = [s for s in data["kr"] if s["ticker"] != ticker]
     data["us"] = [s for s in data["us"] if s["ticker"] != ticker]
     if len(data["kr"]) + len(data["us"]) == before:
-        send_message(f"등록되지 않은 종목: {ticker}")
+        send_message(f"등록되지 않은 종목: {html.escape(ticker)}")
     else:
         save_stocks(data)
-        send_message(f"✅ 종목 제거: <b>{ticker}</b>")
+        send_message(f"✅ 종목 제거: <b>{html.escape(ticker)}</b>")
 
 
 def cmd_watch(parts):
@@ -119,11 +120,11 @@ def cmd_watch(parts):
     keyword = " ".join(parts[1:])
     data = load_stocks()
     if keyword in data["keywords"]:
-        send_message(f"이미 등록된 키워드: {keyword}")
+        send_message(f"이미 등록된 키워드: {html.escape(keyword)}")
         return
     data["keywords"].append(keyword)
     save_stocks(data)
-    send_message(f"✅ 관심 키워드 추가: <b>{keyword}</b>")
+    send_message(f"✅ 관심 키워드 추가: <b>{html.escape(keyword)}</b>")
 
 
 def cmd_unwatch(parts):
@@ -133,18 +134,18 @@ def cmd_unwatch(parts):
     keyword = " ".join(parts[1:])
     data = load_stocks()
     if keyword not in data["keywords"]:
-        send_message(f"등록되지 않은 키워드: {keyword}")
+        send_message(f"등록되지 않은 키워드: {html.escape(keyword)}")
         return
     data["keywords"].remove(keyword)
     save_stocks(data)
-    send_message(f"✅ 관심 키워드 제거: <b>{keyword}</b>")
+    send_message(f"✅ 관심 키워드 제거: <b>{html.escape(keyword)}</b>")
 
 
 def cmd_list(_):
     data = load_stocks()
-    kr_list = "\n".join(f"  • {s['name']} ({s['ticker']})" for s in data["kr"]) or "  없음"
-    us_list = "\n".join(f"  • {s['name']} ({s['ticker']})" for s in data["us"]) or "  없음"
-    kw_list = "\n".join(f"  • {k}" for k in data["keywords"]) or "  없음"
+    kr_list = "\n".join(f"  • {html.escape(s['name'])} ({html.escape(s['ticker'])})" for s in data["kr"]) or "  없음"
+    us_list = "\n".join(f"  • {html.escape(s['name'])} ({html.escape(s['ticker'])})" for s in data["us"]) or "  없음"
+    kw_list = "\n".join(f"  • {html.escape(k)}" for k in data["keywords"]) or "  없음"
     send_message(f"📋 <b>구독 목록</b>\n\n🇰🇷 한국 주식\n{kr_list}\n\n🇺🇸 미국 주식\n{us_list}\n\n🔍 관심 키워드\n{kw_list}")
 
 

@@ -4,6 +4,10 @@
 
 ## Tech Stack
 - [Python]
+- [pyproject.toml]
+
+## 작업 규칙
+- 코드는 src 폴더에 정리
 
 ## 주의사항
 - README.md 또는 문서 작성 시 사용자명, 경로, API 키 등 개인 정보는 절대 노출하지 말 것

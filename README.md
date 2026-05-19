@@ -128,6 +128,7 @@ cd ~/nicknews
 source venv/bin/activate
 gh run download --repo <YOUR_GITHUB_USERNAME>/nicknews --name dist --dir dist
 pip install --upgrade dist/nicknews-*.whl
+sudo systemctl restart nicknews
 ```
 
 ## systemd로 실행하기
@@ -140,7 +141,7 @@ pip install --upgrade dist/nicknews-*.whl
 sudo nano /etc/systemd/system/nicknews.service
 ```
 
-아래 내용 붙여넣기:
+아래 내용 붙여넣기 (`$USER`는 `whoami` 명령어로 확인한 실제 계정명으로 교체):
 
 ```ini
 [Unit]
@@ -159,11 +160,23 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
+저장: `Ctrl+O` → `Enter` → `Ctrl+X`
+
+각 옵션 설명:
+
+| 옵션 | 역할 |
+|------|------|
+| `After=network.target` | 네트워크 연결 후 시작 (텔레그램 API 호출 필요) |
+| `EnvironmentFile=.../.env` | `.env` 파일에서 토큰 읽기 |
+| `Restart=always` | 봇이 죽으면 자동 재시작 |
+| `RestartSec=10` | 재시작 전 10초 대기 |
+| `WantedBy=multi-user.target` | 일반 부팅 시 자동 시작 |
+
 ### 2. 서비스 등록 및 시작
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable nicknews   # 부팅 시 자동 시작
+sudo systemctl daemon-reload     # systemd에 새 파일 인식시키기
+sudo systemctl enable nicknews   # 부팅 시 자동 시작 등록
 sudo systemctl start nicknews    # 지금 바로 시작
 ```
 
@@ -171,8 +184,19 @@ sudo systemctl start nicknews    # 지금 바로 시작
 
 ```bash
 sudo systemctl status nicknews
-sudo journalctl -u nicknews -f   # 실시간 로그
+sudo journalctl -u nicknews -n 50   # 최근 50줄
+sudo journalctl -u nicknews -f      # 실시간 로그
 ```
+
+정상 동작 시 아래와 같이 출력된다:
+
+```
+● nicknews.service - NickNews Telegram Bot
+     Loaded: loaded (/etc/systemd/system/nicknews.service; enabled)
+     Active: active (running) since ...
+```
+
+`Active: active (running)` 이 정상 — `failed` 또는 `inactive`이면 로그로 원인 확인
 
 ### 4. 중지 / 재시작
 

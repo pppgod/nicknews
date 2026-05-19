@@ -69,6 +69,54 @@ nicknews
 /remove AAPL
 ```
 
+## 서버 배포 (gh CLI)
+
+GitHub Actions가 빌드한 wheel 파일을 서버에 직접 받아 설치하는 방법이다.
+
+### 1. gh CLI 설치 (처음 한 번)
+
+```bash
+(type -p wget >/dev/null || (sudo apt update && sudo apt install wget -y)) \
+&& sudo mkdir -p -m 755 /etc/apt/keyrings \
+&& wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+   | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+&& sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+&& echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+   | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+&& sudo apt update && sudo apt install gh -y
+```
+
+### 2. GitHub 로그인
+
+```bash
+gh auth login
+```
+
+### 3. 가상환경 생성 (처음 한 번)
+
+```bash
+python3 -m venv ~/venv
+source ~/venv/bin/activate
+```
+
+### 4. 배포
+
+```bash
+source ~/venv/bin/activate
+gh run download --repo <YOUR_GITHUB_USERNAME>/nicknews --name dist
+pip install dist/nicknews-*.whl
+```
+
+### 5. 업데이트
+
+새 버전이 빌드된 후 동일하게 재실행하면 된다:
+
+```bash
+source ~/venv/bin/activate
+gh run download --repo <YOUR_GITHUB_USERNAME>/nicknews --name dist
+pip install --upgrade dist/nicknews-*.whl
+```
+
 ## systemd로 실행하기
 
 서버에서 백그라운드 상시 실행이 필요할 때 사용한다.

@@ -92,28 +92,41 @@ GitHub Actions가 빌드한 wheel 파일을 서버에 직접 받아 설치하는
 gh auth login
 ```
 
-### 3. 가상환경 생성 (처음 한 번)
+### 3. 배포 디렉토리 및 가상환경 생성 (처음 한 번)
 
 ```bash
-python3 -m venv ~/venv
-source ~/venv/bin/activate
+sudo apt install python3-venv -y
+mkdir -p ~/nicknews
+cd ~/nicknews
+python3 -m venv venv
 ```
 
-### 4. 배포
+### 4. 환경 변수 설정 (처음 한 번)
 
 ```bash
-source ~/venv/bin/activate
-gh run download --repo <YOUR_GITHUB_USERNAME>/nicknews --name dist
+cat > ~/nicknews/.env << 'EOF'
+TELEGRAM_TOKEN=<YOUR_TELEGRAM_TOKEN>
+TELEGRAM_CHAT_ID=<YOUR_CHAT_ID>
+EOF
+```
+
+### 5. 배포
+
+```bash
+cd ~/nicknews
+source venv/bin/activate
+gh run download --repo <YOUR_GITHUB_USERNAME>/nicknews --name dist --dir dist
 pip install dist/nicknews-*.whl
 ```
 
-### 5. 업데이트
+### 6. 업데이트
 
 새 버전이 빌드된 후 동일하게 재실행하면 된다:
 
 ```bash
-source ~/venv/bin/activate
-gh run download --repo <YOUR_GITHUB_USERNAME>/nicknews --name dist
+cd ~/nicknews
+source venv/bin/activate
+gh run download --repo <YOUR_GITHUB_USERNAME>/nicknews --name dist --dir dist
 pip install --upgrade dist/nicknews-*.whl
 ```
 
@@ -138,6 +151,7 @@ After=network.target
 User=$USER
 WorkingDirectory=/home/$USER/nicknews
 ExecStart=/home/$USER/nicknews/venv/bin/nicknews
+EnvironmentFile=/home/$USER/nicknews/.env
 Restart=always
 RestartSec=10
 

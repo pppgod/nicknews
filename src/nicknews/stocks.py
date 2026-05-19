@@ -17,7 +17,7 @@ def search_ticker(query):
         )
         quotes = res.json().get("quotes", [])
         for q in quotes:
-            if q.get("typeDisp") == "Equity":
+            if q.get("quoteType") == "EQUITY":
                 ticker = q.get("symbol", "")
                 name = q.get("shortname") or q.get("longname") or ticker
                 return ticker, name

@@ -1,3 +1,4 @@
+import html
 import feedparser
 from urllib.parse import quote
 
@@ -38,7 +39,9 @@ def fetch_keyword_news(keyword, count=3):
 def format_section(articles, header):
     lines = [header]
     for i, article in enumerate(articles, 1):
-        title = article["title"].strip()
+        title = html.escape(article["title"].strip())
         url = article["url"]
+        if not url.startswith(("http://", "https://")):
+            url = "#"
         lines.append(f'{i}. <a href="{url}">{title}</a>')
     return "\n".join(lines)

@@ -2,6 +2,45 @@
 
 매일 특정 키워드에 관한 정보들을 텔레그램에 보내주는 봇 서버
 
+## 스택
+
+- Python 3.12
+- APScheduler — 스케줄 관리
+- yfinance — 주가 조회
+- feedparser — RSS 뉴스 파싱
+
+## 설치 및 실행
+
+### 1. 가상환경 생성
+
+```bash
+python -m venv venv
+source venv/bin/activate
+```
+
+### 2. 환경 변수 설정
+
+프로젝트 루트에 `.env` 파일을 생성하고 아래 값을 채운다:
+
+```env
+TELEGRAM_TOKEN=<YOUR_TELEGRAM_TOKEN>
+TELEGRAM_CHAT_ID=<YOUR_CHAT_ID>
+```
+
+### 3. 패키지 설치
+
+```bash
+pip install -e .
+```
+
+의존성이 자동으로 설치되고, `nicknews` 명령어가 등록된다.
+
+### 4. 실행
+
+```bash
+nicknews
+```
+
 ## 스케줄
 
 | 작업 | 시간 (KST) |
@@ -32,6 +71,8 @@
 
 ## systemd로 실행하기
 
+서버에서 백그라운드 상시 실행이 필요할 때 사용한다.
+
 ### 1. 서비스 파일 생성
 
 ```bash
@@ -48,7 +89,7 @@ After=network.target
 [Service]
 User=$USER
 WorkingDirectory=/home/$USER/nicknews
-ExecStart=/home/$USER/nicknews/venv/bin/python3 /home/$USER/nicknews/bot.py
+ExecStart=/home/$USER/nicknews/venv/bin/nicknews
 Restart=always
 RestartSec=10
 

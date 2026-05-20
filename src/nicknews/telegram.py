@@ -149,19 +149,50 @@ def cmd_list(_):
     send_message(f"📋 <b>구독 목록</b>\n\n🇰🇷 한국 주식\n{kr_list}\n\n🇺🇸 미국 주식\n{us_list}\n\n🔍 관심 키워드\n{kw_list}")
 
 
+def cmd_news(_):
+    send_daily_news()
+
+
+def cmd_kr(_):
+    send_kr_stocks()
+
+
+def cmd_us(_):
+    send_us_stocks()
+
+
+def cmd_stock(parts):
+    if len(parts) < 2:
+        send_message("사용법: /stock <티커 또는 종목명>\n예) /stock AAPL\n예) /stock 삼성전자")
+        return
+    query = " ".join(parts[1:])
+    send_message(f"🔍 {html.escape(query)} 조회 중...")
+    ticker, name = search_ticker(query)
+    if ticker is None:
+        send_message(f"❌ 종목을 찾을 수 없습니다: {html.escape(query)}")
+        return
+    send_message(get_stock_line(name, ticker))
+
+
 def cmd_help(_):
     send_message(
         "📖 <b>명령어 안내</b>\n\n"
+        "<b>즉시 조회</b>\n"
+        "/news — 오늘 뉴스 지금 받기\n"
+        "/kr — 한국 주식 현재가 조회\n"
+        "/us — 미국 주식 현재가 조회\n"
+        "/stock &lt;티커 또는 종목명&gt; — 단일 종목 현재가 조회\n\n"
+        "<b>구독 관리</b>\n"
         "/add &lt;종목명 또는 티커&gt; — 주식 추가 (한국/미국 자동 구분)\n"
         "/remove &lt;티커&gt; — 주식 제거\n"
         "/watch &lt;키워드&gt; — 관심 키워드 추가\n"
         "/unwatch &lt;키워드&gt; — 관심 키워드 제거\n"
         "/list — 전체 구독 목록 확인\n\n"
         "예시:\n"
+        "/stock 삼성전자\n"
+        "/stock AAPL\n"
         "/add 삼성전자\n"
-        "/add AAPL\n"
-        "/watch 엔비디아\n"
-        "/unwatch 인공지능"
+        "/watch 엔비디아"
     )
 
 
@@ -171,6 +202,10 @@ COMMANDS = {
     "/watch": cmd_watch,
     "/unwatch": cmd_unwatch,
     "/list": cmd_list,
+    "/news": cmd_news,
+    "/kr": cmd_kr,
+    "/us": cmd_us,
+    "/stock": cmd_stock,
     "/help": cmd_help,
 }
 

@@ -4,7 +4,7 @@ from datetime import datetime
 from .sender import send_message
 from .storage import load_user_stocks, all_user_ids
 from .news import fetch_rss, fetch_keyword_news, format_section, TECH_FEEDS, ECONOMY_FEEDS
-from .stocks import get_stock_line
+from .stocks import get_stock_line, is_significant
 
 
 def _news_message(chat_id):
@@ -42,6 +42,8 @@ def send_kr_stocks(intraday=False, chat_id=None):
     header = "코스피 장 중" if intraday else "코스피 마감"
     for uid in targets:
         stocks = load_user_stocks(uid)["kr"]
+        if intraday:
+            stocks = [s for s in stocks if is_significant(s["ticker"])]
         if not stocks:
             continue
         lines = [f"📈 <b>{today} {header}</b>\n"]
@@ -60,6 +62,8 @@ def send_us_stocks(intraday=False, chat_id=None):
     header = "나스닥 장 중" if intraday else "나스닥 마감"
     for uid in targets:
         stocks = load_user_stocks(uid)["us"]
+        if intraday:
+            stocks = [s for s in stocks if is_significant(s["ticker"])]
         if not stocks:
             continue
         lines = [f"📈 <b>{today} {header}</b>\n"]

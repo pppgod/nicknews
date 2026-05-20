@@ -85,13 +85,11 @@ def cmd_news(_, chat_id=None):
 
 
 def cmd_kr(_, chat_id=None):
-    from .bot import is_kr_market_open
-    send_kr_stocks(intraday=is_kr_market_open(), chat_id=chat_id)
+    send_kr_stocks(intraday=False, chat_id=chat_id)
 
 
 def cmd_us(_, chat_id=None):
-    from .bot import is_us_market_open
-    send_us_stocks(intraday=is_us_market_open(), chat_id=chat_id)
+    send_us_stocks(intraday=False, chat_id=chat_id)
 
 
 def cmd_stock(parts, chat_id=None):

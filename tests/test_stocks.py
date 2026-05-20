@@ -165,7 +165,7 @@ class TestGetStockLine:
     def test_price_yesterday_change_shown(self):
         with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(70000, 68000)):
             line = get_stock_line("삼성전자", "005930.KS")
-        assert "전일 🔺+2.94%" in line
+        assert "전일 🔺 +2.94%" in line
 
     def test_price_weekly_change_shown(self):
         closes = [60000.0] * 5
@@ -204,7 +204,7 @@ class TestGetStockLine:
         vols = [4_000_000, 3_000_000]
         with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(70000, 68000, 3_000_000, volumes=vols)):
             line = get_stock_line("삼성전자", "005930.KS")
-        assert "전일 ▼-25.00%" in line
+        assert "전일 ▼ -25.00%" in line
 
     def test_error_returns_failure_message(self):
         with patch("nicknews.stocks.yf.Ticker", side_effect=Exception("timeout")):

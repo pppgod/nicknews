@@ -68,6 +68,10 @@ def _format_volume(vol):
     return f"{int(vol):,}"
 
 
+def _arrow(v):
+    return "🔺" if v >= 0 else "▼"
+
+
 def is_significant(ticker, price_threshold=2.0, vol_threshold=1.5, zscore_threshold=2.0):
     """장중 알림 필터: 임계값 또는 z-score 기준 중 하나라도 충족하면 True."""
     try:
@@ -123,7 +127,7 @@ def get_stock_line(name, ticker):
         volume = info.last_volume
         change = price - prev
         pct = change / prev * 100
-        arrow = "🔺" if change >= 0 else "▼"
+        arrow = _arrow(change)
 
         hist = stock.history(period="5d")
         closes = hist.get("Close", pd.Series(dtype=float))
@@ -132,11 +136,10 @@ def get_stock_line(name, ticker):
         def _change_str(current, past):
             if past > 0:
                 p = (current - past) / past * 100
-                a = "🔺" if p >= 0 else "▼"
-                return f"{a}{p:+.2f}%"
+                return f"{_arrow(p)} {p:+.2f}%"
             return None
 
-        price_parts = [f"전일 {arrow}{pct:+.2f}%"]
+        price_parts = [f"전일 {arrow} {pct:+.2f}%"]
         if len(closes) >= 5 and (s := _change_str(price, closes.iloc[0])):
             price_parts.append(f"1주전 {s}")
         price_str = "  ".join(price_parts)
@@ -170,30 +173,30 @@ def get_stock_detail(name, ticker):
         volumes = hist["Volume"]
         prev_close = closes.iloc[-1]
         today_pct = (current - prev_close) / prev_close * 100
-        today_arrow = "🔺" if today_pct >= 0 else "▼"
+        today_arrow = _arrow(today_pct)
 
         if len(volumes) >= 1 and volumes.iloc[-1] > 0:
             prev_vol = volumes.iloc[-1]
             vol_pct = (volume - prev_vol) / prev_vol * 100
-            va = "🔺" if vol_pct >= 0 else "▼"
+            va = _arrow(vol_pct)
             vol_str = f"{va} {_format_volume(volume)}  ({vol_pct:+.2f}%)"
         else:
             vol_str = _format_volume(volume)
 
         lines = [
             f"📊 <b>{ename}</b> ({eticker})\n",
-            f"현재가  {today_arrow} {current:,.0f}  ({today_pct:+.2f}%)",
+            f"현재가 {today_arrow} {current:,.0f}  ({today_pct:+.2f}%)",
             f"거래량  {vol_str}\n",
             "📅 기간별 등락",
         ]
 
         def _period_line(label, past_price, past_vol):
             price_pct = (current - past_price) / past_price * 100
-            pa = "🔺" if price_pct >= 0 else "▼"
+            pa = _arrow(price_pct)
             base = f"  {label}  {past_price:,.0f}  {pa} {price_pct:+.2f}%"
             if past_vol > 0:
                 vol_pct = (volume - past_vol) / past_vol * 100
-                va = "🔺" if vol_pct >= 0 else "▼"
+                va = _arrow(vol_pct)
                 return f"{base}   거래량 {_format_volume(past_vol)}  {va} {vol_pct:+.2f}%"
             return f"{base}   거래량 {_format_volume(past_vol)}"
 

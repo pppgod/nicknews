@@ -105,7 +105,7 @@ def get_stock_line(name, ticker):
         if vol_changes:
             vol_str += f"  ({'  '.join(vol_changes)})"
 
-        return f"{arrow} <b>{ename}</b>  {price:,.0f}  ({price_str})  거래량 {vol_str}"
+        return f"{arrow} <b>{ename}</b>  {price:,.0f}  ({price_str})\n   거래량 {vol_str}"
     except Exception:
         return f"<b>{ename}</b>  데이터 조회 실패"
 

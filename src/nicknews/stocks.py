@@ -70,14 +70,41 @@ def _format_volume(vol):
 def get_stock_line(name, ticker):
     ename = html.escape(name)
     try:
-        info = yf.Ticker(ticker).fast_info
+        stock = yf.Ticker(ticker)
+        info = stock.fast_info
         price = info.last_price
         prev = info.previous_close
         volume = info.last_volume
         change = price - prev
         pct = change / prev * 100
         arrow = "▲" if change >= 0 else "▼"
-        return f"{arrow} <b>{ename}</b>  {price:,.0f}  ({pct:+.2f}%)  거래량 {_format_volume(volume)}"
+
+        hist = stock.history(period="5d")
+        closes = hist["Close"]
+        vols = hist["Volume"]
+
+        def _change_str(current, past):
+            if past > 0:
+                p = (current - past) / past * 100
+                a = "▲" if p >= 0 else "▼"
+                return f"{a}{p:+.2f}%"
+            return None
+
+        price_parts = [f"전일 {pct:+.2f}%"]
+        if len(closes) >= 5 and (s := _change_str(price, closes.iloc[0])):
+            price_parts.append(f"1주전 {s}")
+        price_str = "  ".join(price_parts)
+
+        vol_changes = []
+        if len(vols) >= 2 and (s := _change_str(volume, vols.iloc[-2])):
+            vol_changes.append(f"전일 {s}")
+        if len(vols) >= 5 and (s := _change_str(volume, vols.iloc[0])):
+            vol_changes.append(f"1주전 {s}")
+        vol_str = _format_volume(volume)
+        if vol_changes:
+            vol_str += f"  ({'  '.join(vol_changes)})"
+
+        return f"{arrow} <b>{ename}</b>  {price:,.0f}  ({price_str})  거래량 {vol_str}"
     except Exception:
         return f"<b>{ename}</b>  데이터 조회 실패"
 

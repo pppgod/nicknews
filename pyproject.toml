@@ -12,7 +12,7 @@ dependencies = [
     "python-dotenv",
     "yfinance",
     "feedparser",
-    "holidays",
+    "exchange-calendars",
 ]
 
 [project.scripts]

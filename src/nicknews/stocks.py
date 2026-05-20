@@ -102,19 +102,23 @@ def get_stock_detail(name, ticker):
         ]
 
         volumes = hist["Volume"]
-        periods = [("1일 전  ", 1), ("1주 전  ", 5), ("1개월 전", 21), ("3개월 전", len(closes) - 1)]
-        for label, n in periods:
-            if n < len(closes):
-                past_price = closes.iloc[-(n + 1)]
-                past_vol = volumes.iloc[-(n + 1)]
-                price_pct = (current - past_price) / past_price * 100
+
+        def _period_line(label, past_price, past_vol):
+            price_pct = (current - past_price) / past_price * 100
+            pa = "▲" if price_pct >= 0 else "▼"
+            base = f"  {label}  {past_price:,.0f}  {pa} {price_pct:+.2f}%"
+            if past_vol > 0:
                 vol_pct = (volume - past_vol) / past_vol * 100
-                pa = "▲" if price_pct >= 0 else "▼"
                 va = "▲" if vol_pct >= 0 else "▼"
-                lines.append(
-                    f"  {label}  {past_price:,.0f}  {pa} {price_pct:+.2f}%"
-                    f"   거래량 {_format_volume(past_vol)}  {va} {vol_pct:+.2f}%"
-                )
+                return f"{base}   거래량 {_format_volume(past_vol)}  {va} {vol_pct:+.2f}%"
+            return f"{base}   거래량 {_format_volume(past_vol)}"
+
+        for label, n in [("1일 전  ", 1), ("1주 전  ", 5), ("1개월 전", 21)]:
+            if n < len(closes):
+                lines.append(_period_line(label, closes.iloc[-(n + 1)], volumes.iloc[-(n + 1)]))
+
+        if len(closes) > 1:
+            lines.append(_period_line("3개월 전", closes.iloc[0], volumes.iloc[0]))
 
         return "\n".join(lines)
     except Exception:

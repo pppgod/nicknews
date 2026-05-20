@@ -3,22 +3,17 @@ import os
 import time
 import requests
 from datetime import datetime
-from dotenv import load_dotenv
 
 from .storage import load_stocks, save_stocks
 from .news import fetch_rss, fetch_keyword_news, format_section, TECH_FEEDS, ECONOMY_FEEDS
 from .stocks import search_ticker, get_market, get_stock_line, get_stock_detail
 
-load_dotenv()
-
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-
 def send_message(text):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
+        "chat_id": chat_id,
         "text": text,
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
@@ -50,9 +45,10 @@ def send_daily_news():
         print(f"뉴스 전송 실패: {result}")
 
 
-def send_kr_stocks():
+def send_kr_stocks(intraday=False):
     today = datetime.now().strftime("%Y년 %m월 %d일")
-    lines = [f"📈 <b>{today} 코스피 마감</b>\n"]
+    header = "코스피 장 중" if intraday else "코스피 마감"
+    lines = [f"📈 <b>{today} {header}</b>\n"]
     for s in load_stocks()["kr"]:
         lines.append(get_stock_line(s["name"], s["ticker"]))
     result = send_message("\n".join(lines))
@@ -62,9 +58,10 @@ def send_kr_stocks():
         print(f"코스피 전송 실패: {result}")
 
 
-def send_us_stocks():
+def send_us_stocks(intraday=False):
     today = datetime.now().strftime("%Y년 %m월 %d일")
-    lines = [f"📈 <b>{today} 나스닥 마감</b>\n"]
+    header = "나스닥 장 중" if intraday else "나스닥 마감"
+    lines = [f"📈 <b>{today} {header}</b>\n"]
     for s in load_stocks()["us"]:
         lines.append(get_stock_line(s["name"], s["ticker"]))
     result = send_message("\n".join(lines))
@@ -221,10 +218,12 @@ def handle_command(text):
 
 
 def poll_messages():
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
     offset = None
     while True:
         try:
-            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
+            url = f"https://api.telegram.org/bot{token}/getUpdates"
             params = {"timeout": 30, "allowed_updates": ["message"]}
             if offset:
                 params["offset"] = offset
@@ -234,7 +233,7 @@ def poll_messages():
                 for update in data["result"]:
                     offset = update["update_id"] + 1
                     msg = update.get("message", {})
-                    if str(msg.get("chat", {}).get("id", "")) != str(TELEGRAM_CHAT_ID):
+                    if str(msg.get("chat", {}).get("id", "")) != str(chat_id):
                         continue
                     text = msg.get("text", "")
                     if text.startswith("/"):

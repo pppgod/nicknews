@@ -31,12 +31,12 @@ def is_us_market_open(now=None):
 
 def _send_kr_if_open():
     if is_kr_market_open():
-        send_kr_stocks()
+        send_kr_stocks(intraday=True)
 
 
 def _send_us_if_open():
     if is_us_market_open():
-        send_us_stocks()
+        send_us_stocks(intraday=True)
 
 
 def main():

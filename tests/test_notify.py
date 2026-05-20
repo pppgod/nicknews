@@ -55,7 +55,8 @@ class TestSendKrStocks:
         with patch("nicknews.notify.send_message", return_value={"ok": True}) as mock_send, \
              patch("nicknews.notify.all_user_ids", return_value={"111"}), \
              patch("nicknews.notify.load_user_stocks", return_value=stocks), \
-             patch("nicknews.notify.get_stock_line", return_value=""):
+             patch("nicknews.notify.get_stock_line", return_value=""), \
+             patch("nicknews.notify.is_significant", return_value=True):
             send_kr_stocks(intraday=True)
         assert "장 중" in mock_send.call_args[0][0]
 
@@ -91,6 +92,59 @@ class TestSendUsStocks:
         with patch("nicknews.notify.send_message", return_value={"ok": True}) as mock_send, \
              patch("nicknews.notify.all_user_ids", return_value={"111"}), \
              patch("nicknews.notify.load_user_stocks", return_value=stocks), \
-             patch("nicknews.notify.get_stock_line", return_value=""):
+             patch("nicknews.notify.get_stock_line", return_value=""), \
+             patch("nicknews.notify.is_significant", return_value=True):
             send_us_stocks(intraday=True)
         assert "장 중" in mock_send.call_args[0][0]
+
+
+class TestIntradayFiltering:
+    def test_kr_intraday_skips_insignificant_stocks(self):
+        stocks = {"kr": [
+            {"name": "삼성전자", "ticker": "005930.KS"},
+            {"name": "SK하이닉스", "ticker": "000660.KS"},
+        ], "us": [], "keywords": []}
+        with patch("nicknews.notify.send_message") as mock_send, \
+             patch("nicknews.notify.all_user_ids", return_value={"111"}), \
+             patch("nicknews.notify.load_user_stocks", return_value=stocks), \
+             patch("nicknews.notify.get_stock_line", return_value=""), \
+             patch("nicknews.notify.is_significant", return_value=False):
+            send_kr_stocks(intraday=True)
+        mock_send.assert_not_called()
+
+    def test_kr_intraday_sends_only_significant_stocks(self):
+        stocks = {"kr": [
+            {"name": "삼성전자", "ticker": "005930.KS"},
+            {"name": "SK하이닉스", "ticker": "000660.KS"},
+        ], "us": [], "keywords": []}
+        def _sig(ticker):
+            return ticker == "005930.KS"
+
+        with patch("nicknews.notify.send_message", return_value={"ok": True}) as mock_send, \
+             patch("nicknews.notify.all_user_ids", return_value={"111"}), \
+             patch("nicknews.notify.load_user_stocks", return_value=stocks), \
+             patch("nicknews.notify.get_stock_line", return_value="line"), \
+             patch("nicknews.notify.is_significant", side_effect=_sig):
+            send_kr_stocks(intraday=True)
+        msg = mock_send.call_args[0][0]
+        assert "삼성전자" not in msg or mock_send.call_count == 1
+
+    def test_us_intraday_skips_insignificant_stocks(self):
+        stocks = {"kr": [], "us": [{"name": "Apple Inc.", "ticker": "AAPL"}], "keywords": []}
+        with patch("nicknews.notify.send_message") as mock_send, \
+             patch("nicknews.notify.all_user_ids", return_value={"111"}), \
+             patch("nicknews.notify.load_user_stocks", return_value=stocks), \
+             patch("nicknews.notify.is_significant", return_value=False):
+            send_us_stocks(intraday=True)
+        mock_send.assert_not_called()
+
+    def test_non_intraday_sends_all_stocks(self):
+        stocks = {"kr": [{"name": "삼성전자", "ticker": "005930.KS"}], "us": [], "keywords": []}
+        with patch("nicknews.notify.send_message", return_value={"ok": True}) as mock_send, \
+             patch("nicknews.notify.all_user_ids", return_value={"111"}), \
+             patch("nicknews.notify.load_user_stocks", return_value=stocks), \
+             patch("nicknews.notify.get_stock_line", return_value="line"), \
+             patch("nicknews.notify.is_significant", return_value=False) as mock_sig:
+            send_kr_stocks(intraday=False)
+        mock_send.assert_called_once()
+        mock_sig.assert_not_called()

@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from nicknews.stocks import get_market, get_stock_detail, get_stock_line, search_ticker
+from nicknews.stocks import get_market, get_stock_detail, get_stock_line, is_significant, search_ticker
 
 
 def _naver_response(items):
@@ -277,3 +277,79 @@ class TestGetStockDetail:
         with patch("nicknews.stocks.yf.Ticker", side_effect=Exception("network error")):
             result = get_stock_detail("Apple Inc.", "AAPL")
         assert "조회 실패" in result
+
+
+# --- is_significant ---
+
+class TestIsSignificant:
+    def _mock_ticker(self, current, prev_close, volume, hist_closes, hist_volumes):
+        mock_stock = MagicMock()
+        mock_stock.fast_info.last_price = current
+        mock_stock.fast_info.previous_close = prev_close
+        mock_stock.fast_info.last_volume = volume
+        mock_stock.history.return_value = pd.DataFrame({
+            "Close": hist_closes,
+            "Volume": hist_volumes,
+        })
+        return mock_stock
+
+    def _flat_history(self, price=100.0, volume=1_000_000, n=21):
+        return [price] * n, [volume] * n
+
+    def test_price_above_threshold_returns_true(self):
+        closes, vols = self._flat_history()
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(
+            103.0, 100.0, 1_000_000, closes, vols
+        )):
+            assert is_significant("AAPL") is True
+
+    def test_price_below_threshold_returns_false(self):
+        closes, vols = self._flat_history()
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(
+            101.0, 100.0, 1_000_000, closes, vols
+        )):
+            assert is_significant("AAPL") is False
+
+    def test_volume_above_threshold_returns_true(self):
+        closes, vols = self._flat_history(volume=1_000_000)
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(
+            101.0, 100.0, 2_000_000, closes, vols
+        )):
+            assert is_significant("AAPL") is True
+
+    def test_price_zscore_above_threshold_returns_true(self):
+        # std ≈ 0.001%, price_pct = 1.5% → zscore >> 2, below price threshold
+        vols = [1_000_000] * 20
+        closes = [100.0 + i * 0.001 for i in range(20)]
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(
+            101.5, 100.0, 1_000_000, closes, vols
+        )):
+            assert is_significant("AAPL") is True
+
+    def test_volume_zscore_above_threshold_returns_true(self):
+        closes = [100.0] * 20
+        # volumes with tiny std, then today's volume is huge
+        vols = [1_000_000 + i * 100 for i in range(20)]
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(
+            101.0, 100.0, 10_000_000, closes, vols
+        )):
+            assert is_significant("AAPL") is True
+
+    def test_insufficient_history_returns_true(self):
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(
+            100.0, 100.0, 1_000_000, [100.0] * 3, [1_000_000] * 3
+        )):
+            assert is_significant("AAPL") is True
+
+    def test_error_returns_true(self):
+        with patch("nicknews.stocks.yf.Ticker", side_effect=Exception("network error")):
+            assert is_significant("AAPL") is True
+
+    def test_zero_volume_avg_does_not_crash(self):
+        closes = [100.0] * 21
+        vols = [0] * 21
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(
+            101.0, 100.0, 0, closes, vols
+        )):
+            result = is_significant("AAPL")
+            assert isinstance(result, bool)

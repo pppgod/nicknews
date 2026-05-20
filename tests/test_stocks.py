@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from nicknews.stocks import get_market, get_stock_detail, get_stock_line, is_significant, search_ticker
+from nicknews.stocks import _arrow, get_market, get_stock_detail, get_stock_line, is_significant, search_ticker
 
 
 def _naver_response(items):
@@ -15,6 +15,19 @@ def _yahoo_response(quotes):
     m = MagicMock()
     m.json.return_value = {"quotes": quotes}
     return m
+
+
+# --- _arrow ---
+
+class TestArrow:
+    def test_positive_returns_up(self):
+        assert _arrow(1.0) == "🔺"
+
+    def test_negative_returns_down(self):
+        assert _arrow(-1.0) == "▼"
+
+    def test_zero_returns_up(self):
+        assert _arrow(0) == "🔺"
 
 
 # --- search_ticker ---

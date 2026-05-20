@@ -166,11 +166,15 @@ class TestGetStockLine:
 # --- get_stock_detail ---
 
 class TestGetStockDetail:
-    def _mock_ticker(self, current_price, volume, hist_closes):
+    def _mock_ticker(self, current_price, volume, hist_closes, hist_volumes=None):
         mock_stock = MagicMock()
         mock_stock.fast_info.last_price = current_price
         mock_stock.fast_info.last_volume = volume
-        mock_stock.history.return_value = pd.DataFrame({"Close": hist_closes})
+        n = len(hist_closes)
+        mock_stock.history.return_value = pd.DataFrame({
+            "Close": hist_closes,
+            "Volume": hist_volumes if hist_volumes is not None else [volume] * n,
+        })
         return mock_stock
 
     def test_shows_current_price(self):
@@ -205,6 +209,13 @@ class TestGetStockDetail:
             mock_yf.return_value = self._mock_ticker(90.0, 1_000_000, [100.0] * 70)
             result = get_stock_detail("Apple Inc.", "AAPL")
         assert "▼" in result
+
+    def test_shows_volume_change_per_period(self):
+        hist_vols = [2_000_000] * 70
+        with patch("nicknews.stocks.yf.Ticker") as mock_yf:
+            mock_yf.return_value = self._mock_ticker(110.0, 5_000_000, [100.0] * 70, hist_vols)
+            result = get_stock_detail("Apple Inc.", "AAPL")
+        assert "2.0M" in result
 
     def test_error_returns_failure_message(self):
         with patch("nicknews.stocks.yf.Ticker", side_effect=Exception("network error")):

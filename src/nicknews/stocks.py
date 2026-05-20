@@ -101,13 +101,20 @@ def get_stock_detail(name, ticker):
             "📅 기간별 등락",
         ]
 
+        volumes = hist["Volume"]
         periods = [("1일 전  ", 1), ("1주 전  ", 5), ("1개월 전", 21), ("3개월 전", len(closes) - 1)]
         for label, n in periods:
             if n < len(closes):
-                past = closes.iloc[-(n + 1)]
-                pct = (current - past) / past * 100
-                a = "▲" if pct >= 0 else "▼"
-                lines.append(f"  {label}  {past:,.0f}  {a} {pct:+.2f}%")
+                past_price = closes.iloc[-(n + 1)]
+                past_vol = volumes.iloc[-(n + 1)]
+                price_pct = (current - past_price) / past_price * 100
+                vol_pct = (volume - past_vol) / past_vol * 100
+                pa = "▲" if price_pct >= 0 else "▼"
+                va = "▲" if vol_pct >= 0 else "▼"
+                lines.append(
+                    f"  {label}  {past_price:,.0f}  {pa} {price_pct:+.2f}%"
+                    f"   거래량 {_format_volume(past_vol)}  {va} {vol_pct:+.2f}%"
+                )
 
         return "\n".join(lines)
     except Exception:

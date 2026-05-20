@@ -1,9 +1,17 @@
+import os
+
 from apscheduler.schedulers.background import BackgroundScheduler
+from dotenv import load_dotenv
 
 from .telegram import send_daily_news, send_kr_stocks, send_us_stocks, poll_messages
 
 
 def main():
+    load_dotenv()
+    missing = [k for k in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID") if not os.getenv(k)]
+    if missing:
+        raise RuntimeError(f"필수 환경변수 미설정: {', '.join(missing)}")
+
     scheduler = BackgroundScheduler(timezone="Asia/Seoul")
     scheduler.add_job(send_daily_news, "cron", hour=9, minute=0)
     scheduler.add_job(send_kr_stocks, "cron", hour=15, minute=35)

@@ -126,35 +126,87 @@ class TestGetMarket:
 # --- get_stock_line ---
 
 class TestGetStockLine:
-    def _mock_fast_info(self, last_price, previous_close, last_volume=1_000_000):
+    def _mock_ticker(self, last_price, previous_close, last_volume=1_000_000,
+                     volumes=None, closes=None):
         fast_info = MagicMock()
         fast_info.last_price = last_price
         fast_info.previous_close = previous_close
         fast_info.last_volume = last_volume
         mock_ticker = MagicMock()
         mock_ticker.fast_info = fast_info
+        n = max(len(volumes or []), len(closes or []))
+        mock_ticker.history.return_value = pd.DataFrame({
+            "Volume": volumes if volumes is not None else [0] * n,
+            "Close": closes if closes is not None else [0.0] * n,
+        })
         return mock_ticker
 
     def test_price_up_shows_up_arrow(self):
-        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_fast_info(70000, 68000)):
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(70000, 68000)):
             line = get_stock_line("삼성전자", "005930.KS")
             assert line.startswith("▲")
 
     def test_price_down_shows_down_arrow(self):
-        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_fast_info(66000, 68000)):
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(66000, 68000)):
             line = get_stock_line("삼성전자", "005930.KS")
             assert line.startswith("▼")
 
     def test_output_contains_name_and_price(self):
-        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_fast_info(70000, 68000)):
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(70000, 68000)):
             line = get_stock_line("삼성전자", "005930.KS")
             assert "삼성전자" in line
             assert "70,000" in line
 
     def test_output_contains_volume(self):
-        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_fast_info(70000, 68000, 5_500_000)):
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(70000, 68000, 5_500_000)):
             line = get_stock_line("삼성전자", "005930.KS")
             assert "5.5M" in line
+
+    def test_price_yesterday_change_shown(self):
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(70000, 68000)):
+            line = get_stock_line("삼성전자", "005930.KS")
+        assert "전일" in line
+        assert "+2.94%" in line
+
+    def test_price_weekly_change_shown(self):
+        closes = [60000.0] * 5
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(70000, 68000, closes=closes)):
+            line = get_stock_line("삼성전자", "005930.KS")
+        assert "1주전" in line
+        assert "+16.67%" in line
+
+    def test_price_weekly_not_shown_with_fewer_than_5_days(self):
+        closes = [68000.0, 68000.0]
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(70000, 68000, closes=closes)):
+            line = get_stock_line("삼성전자", "005930.KS")
+        assert line.count("1주전") == 0
+
+    def test_volume_yesterday_change(self):
+        vols = [4_000_000, 5_000_000]
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(70000, 68000, 5_000_000, volumes=vols)):
+            line = get_stock_line("삼성전자", "005930.KS")
+        assert "전일" in line
+        assert "+25.00%" in line
+
+    def test_volume_weekly_change(self):
+        vols = [2_000_000, 3_000_000, 4_000_000, 4_500_000, 5_000_000]
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(70000, 68000, 5_000_000, volumes=vols)):
+            line = get_stock_line("삼성전자", "005930.KS")
+        assert line.count("1주전") >= 1
+        assert "+150.00%" in line
+
+    def test_volume_weekly_not_shown_with_fewer_than_5_days(self):
+        vols = [4_000_000, 5_000_000]
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(70000, 68000, 5_000_000, volumes=vols)):
+            line = get_stock_line("삼성전자", "005930.KS")
+        assert line.count("1주전") == 0
+
+    def test_volume_down_shows_down_arrow(self):
+        vols = [4_000_000, 3_000_000]
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_ticker(70000, 68000, 3_000_000, volumes=vols)):
+            line = get_stock_line("삼성전자", "005930.KS")
+        assert "전일" in line
+        assert "-25.00%" in line
 
     def test_error_returns_failure_message(self):
         with patch("nicknews.stocks.yf.Ticker", side_effect=Exception("timeout")):

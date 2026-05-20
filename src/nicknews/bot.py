@@ -7,7 +7,8 @@ import pandas as pd
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 
-from .telegram import send_daily_news, send_kr_stocks, send_us_stocks, poll_messages
+from .notify import send_daily_news, send_kr_stocks, send_us_stocks
+from .telegram import poll_messages
 
 KST = ZoneInfo("Asia/Seoul")
 # ZoneInfo("America/New_York") switches between EST(UTC-5) and EDT(UTC-4) automatically

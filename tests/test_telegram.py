@@ -201,7 +201,7 @@ class TestCmdKr:
     def test_always_non_intraday(self):
         with patch("nicknews.commands.send_kr_stocks") as mock:
             cmd_kr(["/kr"])
-        assert mock.call_args.kwargs.get("intraday") is False or mock.call_args[1].get("intraday") is False
+        assert mock.call_args.kwargs["intraday"] is False
 
 
 class TestCmdUs:
@@ -213,7 +213,7 @@ class TestCmdUs:
     def test_always_non_intraday(self):
         with patch("nicknews.commands.send_us_stocks") as mock:
             cmd_us(["/us"])
-        assert mock.call_args.kwargs.get("intraday") is False or mock.call_args[1].get("intraday") is False
+        assert mock.call_args.kwargs["intraday"] is False
 
 
 class TestCmdStock:

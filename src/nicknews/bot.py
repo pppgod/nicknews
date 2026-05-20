@@ -2,12 +2,14 @@ import os
 from datetime import datetime, time as dtime
 from zoneinfo import ZoneInfo
 
+import holidays
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 
 from .telegram import send_daily_news, send_kr_stocks, send_us_stocks, poll_messages
 
 KST = ZoneInfo("Asia/Seoul")
+# ZoneInfo("America/New_York") automatically switches between EST(UTC-5) and EDT(UTC-4)
 EST = ZoneInfo("America/New_York")
 
 
@@ -15,6 +17,8 @@ def is_kr_market_open(now=None):
     if now is None:
         now = datetime.now(KST)
     if now.weekday() >= 5:
+        return False
+    if now.date() in holidays.KR(years=now.year):
         return False
     t = now.time()
     return dtime(9, 0) <= t <= dtime(15, 30)
@@ -24,6 +28,8 @@ def is_us_market_open(now=None):
     if now is None:
         now = datetime.now(EST)
     if now.weekday() >= 5:
+        return False
+    if now.date() in holidays.NYSE(years=now.year):
         return False
     t = now.time()
     return dtime(9, 30) <= t <= dtime(16, 0)

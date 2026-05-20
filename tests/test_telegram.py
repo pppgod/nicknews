@@ -31,7 +31,7 @@ class TestCmdAdd:
     def test_ticker_not_found_sends_error(self):
         with patch("nicknews.telegram.send_message") as mock_send, \
              patch("nicknews.telegram.search_ticker", return_value=(None, None)), \
-             patch("nicknews.telegram.load_stocks", return_value=dict(DEFAULT_DATA)):
+             patch("nicknews.telegram.load_user_stocks", return_value=dict(DEFAULT_DATA)):
             cmd_add(["/add", "없는종목"])
         assert any("찾을 수 없습니다" in m for m in _messages(mock_send))
 
@@ -39,20 +39,20 @@ class TestCmdAdd:
         with patch("nicknews.telegram.send_message"), \
              patch("nicknews.telegram.search_ticker", return_value=("005930.KS", "삼성전자")), \
              patch("nicknews.telegram.get_market", return_value="kr"), \
-             patch("nicknews.telegram.load_stocks", return_value={"kr": [], "us": [], "keywords": []}), \
-             patch("nicknews.telegram.save_stocks") as mock_save:
+             patch("nicknews.telegram.load_user_stocks", return_value={"kr": [], "us": [], "keywords": []}), \
+             patch("nicknews.telegram.save_user_stocks") as mock_save:
             cmd_add(["/add", "삼성전자"])
-        saved = mock_save.call_args[0][0]
+        saved = mock_save.call_args[0][1]
         assert {"name": "삼성전자", "ticker": "005930.KS"} in saved["kr"]
 
     def test_us_stock_saved_to_us(self):
         with patch("nicknews.telegram.send_message"), \
              patch("nicknews.telegram.search_ticker", return_value=("AAPL", "Apple Inc.")), \
              patch("nicknews.telegram.get_market", return_value="us"), \
-             patch("nicknews.telegram.load_stocks", return_value={"kr": [], "us": [], "keywords": []}), \
-             patch("nicknews.telegram.save_stocks") as mock_save:
+             patch("nicknews.telegram.load_user_stocks", return_value={"kr": [], "us": [], "keywords": []}), \
+             patch("nicknews.telegram.save_user_stocks") as mock_save:
             cmd_add(["/add", "AAPL"])
-        saved = mock_save.call_args[0][0]
+        saved = mock_save.call_args[0][1]
         assert {"name": "Apple Inc.", "ticker": "AAPL"} in saved["us"]
 
     def test_duplicate_stock_not_saved(self):
@@ -60,8 +60,8 @@ class TestCmdAdd:
         with patch("nicknews.telegram.send_message") as mock_send, \
              patch("nicknews.telegram.search_ticker", return_value=("005930.KS", "삼성전자")), \
              patch("nicknews.telegram.get_market", return_value="kr"), \
-             patch("nicknews.telegram.load_stocks", return_value=existing), \
-             patch("nicknews.telegram.save_stocks") as mock_save:
+             patch("nicknews.telegram.load_user_stocks", return_value=existing), \
+             patch("nicknews.telegram.save_user_stocks") as mock_save:
             cmd_add(["/add", "삼성전자"])
         mock_save.assert_not_called()
         assert any("이미 등록" in m for m in _messages(mock_send))
@@ -70,8 +70,8 @@ class TestCmdAdd:
         with patch("nicknews.telegram.send_message") as mock_send, \
              patch("nicknews.telegram.search_ticker", return_value=("AAPL", "Apple Inc.")), \
              patch("nicknews.telegram.get_market", return_value="us"), \
-             patch("nicknews.telegram.load_stocks", return_value={"kr": [], "us": [], "keywords": []}), \
-             patch("nicknews.telegram.save_stocks"):
+             patch("nicknews.telegram.load_user_stocks", return_value={"kr": [], "us": [], "keywords": []}), \
+             patch("nicknews.telegram.save_user_stocks"):
             cmd_add(["/add", "AAPL"])
         assert any("Apple Inc." in m for m in _messages(mock_send))
 
@@ -85,26 +85,26 @@ class TestCmdRemove:
     def test_removes_registered_stock(self):
         data = {"kr": [{"name": "삼성전자", "ticker": "005930.KS"}], "us": [], "keywords": []}
         with patch("nicknews.telegram.send_message"), \
-             patch("nicknews.telegram.load_stocks", return_value=data), \
-             patch("nicknews.telegram.save_stocks") as mock_save:
+             patch("nicknews.telegram.load_user_stocks", return_value=data), \
+             patch("nicknews.telegram.save_user_stocks") as mock_save:
             cmd_remove(["/remove", "005930.KS"])
-        saved = mock_save.call_args[0][0]
+        saved = mock_save.call_args[0][1]
         assert saved["kr"] == []
 
     def test_ticker_removal_case_insensitive(self):
         data = {"kr": [], "us": [{"name": "Apple Inc.", "ticker": "AAPL"}], "keywords": []}
         with patch("nicknews.telegram.send_message"), \
-             patch("nicknews.telegram.load_stocks", return_value=data), \
-             patch("nicknews.telegram.save_stocks") as mock_save:
+             patch("nicknews.telegram.load_user_stocks", return_value=data), \
+             patch("nicknews.telegram.save_user_stocks") as mock_save:
             cmd_remove(["/remove", "aapl"])
-        saved = mock_save.call_args[0][0]
+        saved = mock_save.call_args[0][1]
         assert saved["us"] == []
 
     def test_unknown_ticker_not_saved(self):
         data = {"kr": [], "us": [], "keywords": []}
         with patch("nicknews.telegram.send_message") as mock_send, \
-             patch("nicknews.telegram.load_stocks", return_value=data), \
-             patch("nicknews.telegram.save_stocks") as mock_save:
+             patch("nicknews.telegram.load_user_stocks", return_value=data), \
+             patch("nicknews.telegram.save_user_stocks") as mock_save:
             cmd_remove(["/remove", "AAPL"])
         mock_save.assert_not_called()
         assert "등록되지 않은" in mock_send.call_args[0][0]
@@ -119,17 +119,17 @@ class TestCmdWatch:
     def test_adds_new_keyword(self):
         data = {"kr": [], "us": [], "keywords": []}
         with patch("nicknews.telegram.send_message"), \
-             patch("nicknews.telegram.load_stocks", return_value=data), \
-             patch("nicknews.telegram.save_stocks") as mock_save:
+             patch("nicknews.telegram.load_user_stocks", return_value=data), \
+             patch("nicknews.telegram.save_user_stocks") as mock_save:
             cmd_watch(["/watch", "엔비디아"])
-        saved = mock_save.call_args[0][0]
+        saved = mock_save.call_args[0][1]
         assert "엔비디아" in saved["keywords"]
 
     def test_duplicate_keyword_not_saved(self):
         data = {"kr": [], "us": [], "keywords": ["엔비디아"]}
         with patch("nicknews.telegram.send_message") as mock_send, \
-             patch("nicknews.telegram.load_stocks", return_value=data), \
-             patch("nicknews.telegram.save_stocks") as mock_save:
+             patch("nicknews.telegram.load_user_stocks", return_value=data), \
+             patch("nicknews.telegram.save_user_stocks") as mock_save:
             cmd_watch(["/watch", "엔비디아"])
         mock_save.assert_not_called()
         assert "이미 등록" in mock_send.call_args[0][0]
@@ -144,17 +144,17 @@ class TestCmdUnwatch:
     def test_removes_keyword(self):
         data = {"kr": [], "us": [], "keywords": ["엔비디아"]}
         with patch("nicknews.telegram.send_message"), \
-             patch("nicknews.telegram.load_stocks", return_value=data), \
-             patch("nicknews.telegram.save_stocks") as mock_save:
+             patch("nicknews.telegram.load_user_stocks", return_value=data), \
+             patch("nicknews.telegram.save_user_stocks") as mock_save:
             cmd_unwatch(["/unwatch", "엔비디아"])
-        saved = mock_save.call_args[0][0]
+        saved = mock_save.call_args[0][1]
         assert "엔비디아" not in saved["keywords"]
 
     def test_unknown_keyword_not_saved(self):
         data = {"kr": [], "us": [], "keywords": []}
         with patch("nicknews.telegram.send_message") as mock_send, \
-             patch("nicknews.telegram.load_stocks", return_value=data), \
-             patch("nicknews.telegram.save_stocks") as mock_save:
+             patch("nicknews.telegram.load_user_stocks", return_value=data), \
+             patch("nicknews.telegram.save_user_stocks") as mock_save:
             cmd_unwatch(["/unwatch", "엔비디아"])
         mock_save.assert_not_called()
         assert "등록되지 않은" in mock_send.call_args[0][0]
@@ -163,7 +163,7 @@ class TestCmdUnwatch:
 class TestCmdList:
     def test_empty_list_shows_none_message(self):
         with patch("nicknews.telegram.send_message") as mock_send, \
-             patch("nicknews.telegram.load_stocks", return_value=DEFAULT_DATA):
+             patch("nicknews.telegram.load_user_stocks", return_value=DEFAULT_DATA):
             cmd_list(["/list"])
         msg = mock_send.call_args[0][0]
         assert msg.count("없음") == 3
@@ -175,7 +175,7 @@ class TestCmdList:
             "keywords": ["AI"],
         }
         with patch("nicknews.telegram.send_message") as mock_send, \
-             patch("nicknews.telegram.load_stocks", return_value=data):
+             patch("nicknews.telegram.load_user_stocks", return_value=data):
             cmd_list(["/list"])
         msg = mock_send.call_args[0][0]
         assert "삼성전자" in msg

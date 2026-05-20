@@ -1,7 +1,10 @@
 import os
 import json
 
-STOCKS_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "stocks.json")
+STOCKS_FILE = os.getenv(
+    "NICKNEWS_DATA_FILE",
+    os.path.join(os.getcwd(), "stocks.json"),
+)
 
 
 def load_stocks():

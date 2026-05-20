@@ -4,9 +4,13 @@ import pytest
 
 from nicknews.telegram import (
     cmd_add,
+    cmd_kr,
     cmd_list,
+    cmd_news,
     cmd_remove,
+    cmd_stock,
     cmd_unwatch,
+    cmd_us,
     cmd_watch,
     handle_command,
 )
@@ -177,6 +181,54 @@ class TestCmdList:
         assert "삼성전자" in msg
         assert "Apple Inc." in msg
         assert "AI" in msg
+
+
+class TestCmdNews:
+    def test_calls_send_daily_news(self):
+        with patch("nicknews.telegram.send_daily_news") as mock:
+            cmd_news(["/news"])
+        mock.assert_called_once()
+
+
+class TestCmdKr:
+    def test_calls_send_kr_stocks(self):
+        with patch("nicknews.telegram.send_kr_stocks") as mock:
+            cmd_kr(["/kr"])
+        mock.assert_called_once()
+
+
+class TestCmdUs:
+    def test_calls_send_us_stocks(self):
+        with patch("nicknews.telegram.send_us_stocks") as mock:
+            cmd_us(["/us"])
+        mock.assert_called_once()
+
+
+class TestCmdStock:
+    def test_no_args_sends_usage(self):
+        with patch("nicknews.telegram.send_message") as mock_send:
+            cmd_stock(["/stock"])
+        assert "사용법" in mock_send.call_args[0][0]
+
+    def test_ticker_not_found_sends_error(self):
+        with patch("nicknews.telegram.send_message") as mock_send, \
+             patch("nicknews.telegram.search_ticker", return_value=(None, None)):
+            cmd_stock(["/stock", "없는종목"])
+        assert any("찾을 수 없습니다" in m for m in _messages(mock_send))
+
+    def test_valid_ticker_sends_price(self):
+        with patch("nicknews.telegram.send_message") as mock_send, \
+             patch("nicknews.telegram.search_ticker", return_value=("AAPL", "Apple Inc.")), \
+             patch("nicknews.telegram.get_stock_detail", return_value="📊 <b>Apple Inc.</b> (AAPL)\n현재가 ▲ 200"):
+            cmd_stock(["/stock", "AAPL"])
+        assert any("Apple Inc." in m for m in _messages(mock_send))
+
+    def test_multiword_query_joined(self):
+        with patch("nicknews.telegram.send_message"), \
+             patch("nicknews.telegram.search_ticker", return_value=("NVDA", "NVIDIA")) as mock_search, \
+             patch("nicknews.telegram.get_stock_detail", return_value="📊 <b>NVIDIA</b> (NVDA)"):
+            cmd_stock(["/stock", "nvidia", "corp"])
+        mock_search.assert_called_once_with("nvidia corp")
 
 
 class TestHandleCommand:

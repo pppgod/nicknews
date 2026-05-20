@@ -3,22 +3,17 @@ import os
 import time
 import requests
 from datetime import datetime
-from dotenv import load_dotenv
 
 from .storage import load_stocks, save_stocks
 from .news import fetch_rss, fetch_keyword_news, format_section, TECH_FEEDS, ECONOMY_FEEDS
-from .stocks import search_ticker, get_market, get_stock_line
-
-load_dotenv()
-
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
+from .stocks import search_ticker, get_market, get_stock_line, get_stock_detail
 
 def send_message(text):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
+        "chat_id": chat_id,
         "text": text,
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
@@ -50,9 +45,10 @@ def send_daily_news():
         print(f"뉴스 전송 실패: {result}")
 
 
-def send_kr_stocks():
+def send_kr_stocks(intraday=False):
     today = datetime.now().strftime("%Y년 %m월 %d일")
-    lines = [f"📈 <b>{today} 코스피 마감</b>\n"]
+    header = "코스피 장 중" if intraday else "코스피 마감"
+    lines = [f"📈 <b>{today} {header}</b>\n"]
     for s in load_stocks()["kr"]:
         lines.append(get_stock_line(s["name"], s["ticker"]))
     result = send_message("\n".join(lines))
@@ -62,9 +58,10 @@ def send_kr_stocks():
         print(f"코스피 전송 실패: {result}")
 
 
-def send_us_stocks():
+def send_us_stocks(intraday=False):
     today = datetime.now().strftime("%Y년 %m월 %d일")
-    lines = [f"📈 <b>{today} 나스닥 마감</b>\n"]
+    header = "나스닥 장 중" if intraday else "나스닥 마감"
+    lines = [f"📈 <b>{today} {header}</b>\n"]
     for s in load_stocks()["us"]:
         lines.append(get_stock_line(s["name"], s["ticker"]))
     result = send_message("\n".join(lines))
@@ -89,7 +86,7 @@ def cmd_add(parts):
     market = get_market(ticker)
     data = load_stocks()
     if any(s["ticker"] == ticker for s in data[market]):
-        send_message(f"이미 등록된 종목: {name} ({ticker})")
+        send_message(f"이미 등록된 종목: {html.escape(name)} ({html.escape(ticker)})")
         return
     market_label = "🇰🇷 한국" if market == "kr" else "🇺🇸 미국"
     data[market].append({"name": name, "ticker": ticker})
@@ -149,19 +146,50 @@ def cmd_list(_):
     send_message(f"📋 <b>구독 목록</b>\n\n🇰🇷 한국 주식\n{kr_list}\n\n🇺🇸 미국 주식\n{us_list}\n\n🔍 관심 키워드\n{kw_list}")
 
 
+def cmd_news(_):
+    send_daily_news()
+
+
+def cmd_kr(_):
+    send_kr_stocks()
+
+
+def cmd_us(_):
+    send_us_stocks()
+
+
+def cmd_stock(parts):
+    if len(parts) < 2:
+        send_message("사용법: /stock <티커 또는 종목명>\n예) /stock AAPL\n예) /stock 삼성전자")
+        return
+    query = " ".join(parts[1:])
+    send_message(f"🔍 {html.escape(query)} 조회 중...")
+    ticker, name = search_ticker(query)
+    if ticker is None:
+        send_message(f"❌ 종목을 찾을 수 없습니다: {html.escape(query)}")
+        return
+    send_message(get_stock_detail(name, ticker))
+
+
 def cmd_help(_):
     send_message(
         "📖 <b>명령어 안내</b>\n\n"
+        "<b>즉시 조회</b>\n"
+        "/news — 오늘 뉴스 지금 받기\n"
+        "/kr — 한국 주식 현재가 조회\n"
+        "/us — 미국 주식 현재가 조회\n"
+        "/stock &lt;티커 또는 종목명&gt; — 단일 종목 현재가 조회\n\n"
+        "<b>구독 관리</b>\n"
         "/add &lt;종목명 또는 티커&gt; — 주식 추가 (한국/미국 자동 구분)\n"
         "/remove &lt;티커&gt; — 주식 제거\n"
         "/watch &lt;키워드&gt; — 관심 키워드 추가\n"
         "/unwatch &lt;키워드&gt; — 관심 키워드 제거\n"
         "/list — 전체 구독 목록 확인\n\n"
         "예시:\n"
+        "/stock 삼성전자\n"
+        "/stock AAPL\n"
         "/add 삼성전자\n"
-        "/add AAPL\n"
-        "/watch 엔비디아\n"
-        "/unwatch 인공지능"
+        "/watch 엔비디아"
     )
 
 
@@ -171,6 +199,10 @@ COMMANDS = {
     "/watch": cmd_watch,
     "/unwatch": cmd_unwatch,
     "/list": cmd_list,
+    "/news": cmd_news,
+    "/kr": cmd_kr,
+    "/us": cmd_us,
+    "/stock": cmd_stock,
     "/help": cmd_help,
 }
 
@@ -186,10 +218,12 @@ def handle_command(text):
 
 
 def poll_messages():
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
     offset = None
     while True:
         try:
-            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
+            url = f"https://api.telegram.org/bot{token}/getUpdates"
             params = {"timeout": 30, "allowed_updates": ["message"]}
             if offset:
                 params["offset"] = offset
@@ -199,7 +233,7 @@ def poll_messages():
                 for update in data["result"]:
                     offset = update["update_id"] + 1
                     msg = update.get("message", {})
-                    if str(msg.get("chat", {}).get("id", "")) != str(TELEGRAM_CHAT_ID):
+                    if str(msg.get("chat", {}).get("id", "")) != str(chat_id):
                         continue
                     text = msg.get("text", "")
                     if text.startswith("/"):

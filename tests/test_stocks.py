@@ -1,6 +1,8 @@
 from unittest.mock import MagicMock, patch
 
-from nicknews.stocks import get_market, get_stock_line, search_ticker
+import pandas as pd
+
+from nicknews.stocks import get_market, get_stock_detail, get_stock_line, search_ticker
 
 
 def _naver_response(items):
@@ -124,10 +126,11 @@ class TestGetMarket:
 # --- get_stock_line ---
 
 class TestGetStockLine:
-    def _mock_fast_info(self, last_price, previous_close):
+    def _mock_fast_info(self, last_price, previous_close, last_volume=1_000_000):
         fast_info = MagicMock()
         fast_info.last_price = last_price
         fast_info.previous_close = previous_close
+        fast_info.last_volume = last_volume
         mock_ticker = MagicMock()
         mock_ticker.fast_info = fast_info
         return mock_ticker
@@ -148,8 +151,72 @@ class TestGetStockLine:
             assert "삼성전자" in line
             assert "70,000" in line
 
+    def test_output_contains_volume(self):
+        with patch("nicknews.stocks.yf.Ticker", return_value=self._mock_fast_info(70000, 68000, 5_500_000)):
+            line = get_stock_line("삼성전자", "005930.KS")
+            assert "5.5M" in line
+
     def test_error_returns_failure_message(self):
         with patch("nicknews.stocks.yf.Ticker", side_effect=Exception("timeout")):
             line = get_stock_line("삼성전자", "005930.KS")
             assert "삼성전자" in line
             assert "데이터 조회 실패" in line
+
+
+# --- get_stock_detail ---
+
+class TestGetStockDetail:
+    def _mock_ticker(self, current_price, volume, hist_closes, hist_volumes=None):
+        mock_stock = MagicMock()
+        mock_stock.fast_info.last_price = current_price
+        mock_stock.fast_info.last_volume = volume
+        n = len(hist_closes)
+        mock_stock.history.return_value = pd.DataFrame({
+            "Close": hist_closes,
+            "Volume": hist_volumes if hist_volumes is not None else [volume] * n,
+        })
+        return mock_stock
+
+    def test_shows_current_price(self):
+        with patch("nicknews.stocks.yf.Ticker") as mock_yf:
+            mock_yf.return_value = self._mock_ticker(110.0, 1_000_000, [100.0] * 70)
+            result = get_stock_detail("Apple Inc.", "AAPL")
+        assert "110" in result
+
+    def test_shows_volume_in_M(self):
+        with patch("nicknews.stocks.yf.Ticker") as mock_yf:
+            mock_yf.return_value = self._mock_ticker(110.0, 5_500_000, [100.0] * 70)
+            result = get_stock_detail("Apple Inc.", "AAPL")
+        assert "5.5M" in result
+
+    def test_shows_all_period_labels(self):
+        with patch("nicknews.stocks.yf.Ticker") as mock_yf:
+            mock_yf.return_value = self._mock_ticker(110.0, 1_000_000, [100.0] * 70)
+            result = get_stock_detail("Apple Inc.", "AAPL")
+        assert "1주 전" in result
+        assert "1개월 전" in result
+        assert "3개월 전" in result
+
+    def test_up_arrow_when_price_higher_than_history(self):
+        with patch("nicknews.stocks.yf.Ticker") as mock_yf:
+            mock_yf.return_value = self._mock_ticker(110.0, 1_000_000, [100.0] * 70)
+            result = get_stock_detail("Apple Inc.", "AAPL")
+        assert "▲" in result
+
+    def test_down_arrow_when_price_lower_than_history(self):
+        with patch("nicknews.stocks.yf.Ticker") as mock_yf:
+            mock_yf.return_value = self._mock_ticker(90.0, 1_000_000, [100.0] * 70)
+            result = get_stock_detail("Apple Inc.", "AAPL")
+        assert "▼" in result
+
+    def test_shows_volume_change_per_period(self):
+        hist_vols = [2_000_000] * 70
+        with patch("nicknews.stocks.yf.Ticker") as mock_yf:
+            mock_yf.return_value = self._mock_ticker(110.0, 5_000_000, [100.0] * 70, hist_vols)
+            result = get_stock_detail("Apple Inc.", "AAPL")
+        assert "2.0M" in result
+
+    def test_error_returns_failure_message(self):
+        with patch("nicknews.stocks.yf.Ticker", side_effect=Exception("network error")):
+            result = get_stock_detail("Apple Inc.", "AAPL")
+        assert "조회 실패" in result

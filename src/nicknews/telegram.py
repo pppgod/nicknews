@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from .storage import load_stocks, save_stocks
 from .news import fetch_rss, fetch_keyword_news, format_section, TECH_FEEDS, ECONOMY_FEEDS
-from .stocks import search_ticker, get_market, get_stock_line
+from .stocks import search_ticker, get_market, get_stock_line, get_stock_detail
 
 load_dotenv()
 
@@ -171,7 +171,7 @@ def cmd_stock(parts):
     if ticker is None:
         send_message(f"❌ 종목을 찾을 수 없습니다: {html.escape(query)}")
         return
-    send_message(get_stock_line(name, ticker))
+    send_message(get_stock_detail(name, ticker))
 
 
 def cmd_help(_):

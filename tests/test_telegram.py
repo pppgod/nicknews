@@ -219,14 +219,14 @@ class TestCmdStock:
     def test_valid_ticker_sends_price(self):
         with patch("nicknews.telegram.send_message") as mock_send, \
              patch("nicknews.telegram.search_ticker", return_value=("AAPL", "Apple Inc.")), \
-             patch("nicknews.telegram.get_stock_line", return_value="▲ <b>Apple Inc.</b>  200  (+1.00%)"):
+             patch("nicknews.telegram.get_stock_detail", return_value="📊 <b>Apple Inc.</b> (AAPL)\n현재가 ▲ 200"):
             cmd_stock(["/stock", "AAPL"])
         assert any("Apple Inc." in m for m in _messages(mock_send))
 
     def test_multiword_query_joined(self):
         with patch("nicknews.telegram.send_message"), \
              patch("nicknews.telegram.search_ticker", return_value=("NVDA", "NVIDIA")) as mock_search, \
-             patch("nicknews.telegram.get_stock_line", return_value="▲ <b>NVIDIA</b>  900  (+2.00%)"):
+             patch("nicknews.telegram.get_stock_detail", return_value="📊 <b>NVIDIA</b> (NVDA)"):
             cmd_stock(["/stock", "nvidia", "corp"])
         mock_search.assert_called_once_with("nvidia corp")
 

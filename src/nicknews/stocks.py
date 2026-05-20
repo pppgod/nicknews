@@ -58,14 +58,57 @@ def get_market(ticker):
         return "us"
 
 
+def _format_volume(vol):
+    if vol >= 1_000_000:
+        return f"{vol / 1_000_000:.1f}M"
+    if vol >= 1_000:
+        return f"{vol / 1_000:.1f}K"
+    return f"{int(vol):,}"
+
+
 def get_stock_line(name, ticker):
     try:
         info = yf.Ticker(ticker).fast_info
         price = info.last_price
         prev = info.previous_close
+        volume = info.last_volume
         change = price - prev
         pct = change / prev * 100
         arrow = "▲" if change >= 0 else "▼"
-        return f"{arrow} <b>{name}</b>  {price:,.0f}  ({pct:+.2f}%)"
+        return f"{arrow} <b>{name}</b>  {price:,.0f}  ({pct:+.2f}%)  거래량 {_format_volume(volume)}"
+    except Exception:
+        return f"<b>{name}</b>  데이터 조회 실패"
+
+
+def get_stock_detail(name, ticker):
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.fast_info
+        current = info.last_price
+        volume = info.last_volume
+
+        hist = stock.history(period="3mo")
+        closes = hist["Close"]
+
+        prev_close = closes.iloc[-1]
+        today_pct = (current - prev_close) / prev_close * 100
+        today_arrow = "▲" if today_pct >= 0 else "▼"
+
+        lines = [
+            f"📊 <b>{name}</b> ({ticker})\n",
+            f"현재가  {today_arrow} {current:,.0f}  ({today_pct:+.2f}%)",
+            f"거래량  {_format_volume(volume)}\n",
+            "📅 기간별 등락",
+        ]
+
+        periods = [("1일 전  ", 1), ("1주 전  ", 5), ("1개월 전", 21), ("3개월 전", len(closes) - 1)]
+        for label, n in periods:
+            if n < len(closes):
+                past = closes.iloc[-(n + 1)]
+                pct = (current - past) / past * 100
+                a = "▲" if pct >= 0 else "▼"
+                lines.append(f"  {label}  {past:,.0f}  {a} {pct:+.2f}%")
+
+        return "\n".join(lines)
     except Exception:
         return f"<b>{name}</b>  데이터 조회 실패"

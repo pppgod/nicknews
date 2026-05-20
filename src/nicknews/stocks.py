@@ -1,4 +1,5 @@
 import html
+import pandas as pd
 import requests
 import yfinance as yf
 
@@ -80,8 +81,8 @@ def get_stock_line(name, ticker):
         arrow = "▲" if change >= 0 else "▼"
 
         hist = stock.history(period="5d")
-        closes = hist["Close"]
-        vols = hist["Volume"]
+        closes = hist.get("Close", pd.Series(dtype=float))
+        vols = hist.get("Volume", pd.Series(dtype=float))
 
         def _change_str(current, past):
             if past > 0:

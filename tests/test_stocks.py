@@ -193,7 +193,6 @@ class TestGetStockDetail:
         with patch("nicknews.stocks.yf.Ticker") as mock_yf:
             mock_yf.return_value = self._mock_ticker(110.0, 1_000_000, [100.0] * 70)
             result = get_stock_detail("Apple Inc.", "AAPL")
-        assert "1일 전" in result
         assert "1주 전" in result
         assert "1개월 전" in result
         assert "3개월 전" in result

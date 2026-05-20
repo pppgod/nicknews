@@ -117,7 +117,7 @@ def get_stock_detail(name, ticker):
                 return f"{base}   거래량 {_format_volume(past_vol)}  {va} {vol_pct:+.2f}%"
             return f"{base}   거래량 {_format_volume(past_vol)}"
 
-        for label, n in [("1일 전  ", 1), ("1주 전  ", 5), ("1개월 전", 21)]:
+        for label, n in [("1주 전  ", 5), ("1개월 전", 21)]:
             if n <= len(closes):
                 lines.append(_period_line(label, closes.iloc[-n], volumes.iloc[-n]))
 

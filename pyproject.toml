@@ -18,7 +18,10 @@ dependencies = [
 nicknews = "nicknews.bot:main"
 
 [project.optional-dependencies]
-dev = ["ruff"]
+dev = ["ruff", "pytest", "pytest-cov"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=src/nicknews --cov-report=term-missing --cov-fail-under=70"

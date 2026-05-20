@@ -4,24 +4,47 @@ import yfinance as yf
 KR_EXCHANGES = {"KSC", "KOE", "KSE", "KQ"}
 
 YAHOO_SEARCH_URL = "https://query1.finance.yahoo.com/v1/finance/search"
-YAHOO_HEADERS = {"User-Agent": "Mozilla/5.0"}
+NAVER_SEARCH_URL = "https://ac.stock.naver.com/ac"
+HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+
+def _search_naver(query):
+    """Korean stock name -> (ticker, name) via Naver Finance autocomplete."""
+    res = requests.get(
+        NAVER_SEARCH_URL,
+        params={"q": query, "q_enc": "UTF-8", "target": "stock"},
+        headers=HEADERS,
+        timeout=10,
+    )
+    items = res.json().get("items", [])
+    if not items:
+        return None, None
+    item = items[0]
+    suffix = ".KS" if item.get("typeCode") == "KOSPI" else ".KQ"
+    return f"{item['code']}{suffix}", item["name"]
+
+
+def _search_yahoo(query):
+    """English name/ticker -> (ticker, name) via Yahoo Finance."""
+    res = requests.get(
+        YAHOO_SEARCH_URL,
+        params={"q": query, "quotesCount": 5, "newsCount": 0},
+        headers=HEADERS,
+        timeout=10,
+    )
+    for q in res.json().get("quotes", []):
+        if q.get("quoteType") == "EQUITY":
+            ticker = q.get("symbol", "")
+            name = q.get("shortname") or q.get("longname") or ticker
+            return ticker, name
+    return None, None
 
 
 def search_ticker(query):
     try:
-        res = requests.get(
-            YAHOO_SEARCH_URL,
-            params={"q": query, "quotesCount": 5, "newsCount": 0, "lang": "ko", "region": "KR"},
-            headers=YAHOO_HEADERS,
-            timeout=10,
-        )
-        quotes = res.json().get("quotes", [])
-        for q in quotes:
-            if q.get("quoteType") == "EQUITY":
-                ticker = q.get("symbol", "")
-                name = q.get("shortname") or q.get("longname") or ticker
-                return ticker, name
-        return None, None
+        if any("가" <= c <= "힣" for c in query):
+            return _search_naver(query)
+        return _search_yahoo(query)
     except Exception:
         return None, None
 

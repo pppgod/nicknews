@@ -77,12 +77,12 @@ def is_significant(ticker, price_threshold=2.0, vol_threshold=1.5, zscore_thresh
         prev_close = info.previous_close
         volume = info.last_volume
 
-        hist = stock.history(period="1mo")
+        hist = stock.history(period="5d")
         if len(hist) < 5:
             return True
 
-        closes = hist["Close"]
-        volumes = hist["Volume"]
+        closes = hist.get("Close", pd.Series(dtype=float))
+        volumes = hist.get("Volume", pd.Series(dtype=float))
 
         price_pct = (current - prev_close) / prev_close * 100
 

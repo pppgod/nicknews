@@ -86,7 +86,7 @@ def cmd_add(parts):
     market = get_market(ticker)
     data = load_stocks()
     if any(s["ticker"] == ticker for s in data[market]):
-        send_message(f"이미 등록된 종목: {name} ({ticker})")
+        send_message(f"이미 등록된 종목: {html.escape(name)} ({html.escape(ticker)})")
         return
     market_label = "🇰🇷 한국" if market == "kr" else "🇺🇸 미국"
     data[market].append({"name": name, "ticker": ticker})

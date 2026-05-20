@@ -43,5 +43,5 @@ def format_section(articles, header):
         url = article["url"]
         if not url.startswith(("http://", "https://")):
             url = "#"
-        lines.append(f'{i}. <a href="{url}">{title}</a>')
+        lines.append(f'{i}. <a href="{html.escape(url)}">{title}</a>')
     return "\n".join(lines)

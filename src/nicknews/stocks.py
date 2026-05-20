@@ -1,3 +1,4 @@
+import html
 import requests
 import yfinance as yf
 
@@ -67,6 +68,7 @@ def _format_volume(vol):
 
 
 def get_stock_line(name, ticker):
+    ename = html.escape(name)
     try:
         info = yf.Ticker(ticker).fast_info
         price = info.last_price
@@ -75,12 +77,14 @@ def get_stock_line(name, ticker):
         change = price - prev
         pct = change / prev * 100
         arrow = "▲" if change >= 0 else "▼"
-        return f"{arrow} <b>{name}</b>  {price:,.0f}  ({pct:+.2f}%)  거래량 {_format_volume(volume)}"
+        return f"{arrow} <b>{ename}</b>  {price:,.0f}  ({pct:+.2f}%)  거래량 {_format_volume(volume)}"
     except Exception:
-        return f"<b>{name}</b>  데이터 조회 실패"
+        return f"<b>{ename}</b>  데이터 조회 실패"
 
 
 def get_stock_detail(name, ticker):
+    ename = html.escape(name)
+    eticker = html.escape(ticker)
     try:
         stock = yf.Ticker(ticker)
         info = stock.fast_info
@@ -95,7 +99,7 @@ def get_stock_detail(name, ticker):
         today_arrow = "▲" if today_pct >= 0 else "▼"
 
         lines = [
-            f"📊 <b>{name}</b> ({ticker})\n",
+            f"📊 <b>{ename}</b> ({eticker})\n",
             f"현재가  {today_arrow} {current:,.0f}  ({today_pct:+.2f}%)",
             f"거래량  {_format_volume(volume)}\n",
             "📅 기간별 등락",
@@ -114,12 +118,12 @@ def get_stock_detail(name, ticker):
             return f"{base}   거래량 {_format_volume(past_vol)}"
 
         for label, n in [("1일 전  ", 1), ("1주 전  ", 5), ("1개월 전", 21)]:
-            if n < len(closes):
-                lines.append(_period_line(label, closes.iloc[-(n + 1)], volumes.iloc[-(n + 1)]))
+            if n <= len(closes):
+                lines.append(_period_line(label, closes.iloc[-n], volumes.iloc[-n]))
 
         if len(closes) > 1:
             lines.append(_period_line("3개월 전", closes.iloc[0], volumes.iloc[0]))
 
         return "\n".join(lines)
     except Exception:
-        return f"<b>{name}</b>  데이터 조회 실패"
+        return f"<b>{ename}</b>  데이터 조회 실패"

@@ -117,17 +117,22 @@ class TestIntradayFiltering:
             {"name": "삼성전자", "ticker": "005930.KS"},
             {"name": "SK하이닉스", "ticker": "000660.KS"},
         ], "us": [], "keywords": []}
+        significant_tickers = []
+
         def _sig(ticker):
             return ticker == "005930.KS"
 
-        with patch("nicknews.notify.send_message", return_value={"ok": True}) as mock_send, \
+        def _line(name, ticker):
+            significant_tickers.append(ticker)
+            return f"line:{ticker}"
+
+        with patch("nicknews.notify.send_message", return_value={"ok": True}), \
              patch("nicknews.notify.all_user_ids", return_value={"111"}), \
              patch("nicknews.notify.load_user_stocks", return_value=stocks), \
-             patch("nicknews.notify.get_stock_line", return_value="line"), \
+             patch("nicknews.notify.get_stock_line", side_effect=_line), \
              patch("nicknews.notify.is_significant", side_effect=_sig):
             send_kr_stocks(intraday=True)
-        msg = mock_send.call_args[0][0]
-        assert "삼성전자" not in msg or mock_send.call_count == 1
+        assert significant_tickers == ["005930.KS"]
 
     def test_us_intraday_skips_insignificant_stocks(self):
         stocks = {"kr": [], "us": [{"name": "Apple Inc.", "ticker": "AAPL"}], "keywords": []}

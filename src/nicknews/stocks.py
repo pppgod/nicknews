@@ -68,6 +68,51 @@ def _format_volume(vol):
     return f"{int(vol):,}"
 
 
+def is_significant(ticker, price_threshold=2.0, vol_threshold=1.5, zscore_threshold=2.0):
+    """장중 알림 필터: 임계값 또는 z-score 기준 중 하나라도 충족하면 True."""
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.fast_info
+        current = info.last_price
+        prev_close = info.previous_close
+        volume = info.last_volume
+
+        hist = stock.history(period="5d")
+        if len(hist) < 5:
+            return True
+
+        closes = hist.get("Close", pd.Series(dtype=float))
+        volumes = hist.get("Volume", pd.Series(dtype=float))
+
+        price_pct = (current - prev_close) / prev_close * 100
+
+        # 임계값: 주가 2% 이상 변동
+        if abs(price_pct) >= price_threshold:
+            return True
+
+        # 임계값: 거래량이 최근 평균의 1.5배 이상
+        avg_vol = volumes.mean()
+        if avg_vol > 0 and volume >= avg_vol * vol_threshold:
+            return True
+
+        # z-score: 최근 수익률 분포 대비 오늘 변동
+        returns = closes.pct_change().dropna() * 100
+        if len(returns) >= 5:
+            std = returns.std()
+            if std > 0 and abs((price_pct - returns.mean()) / std) >= zscore_threshold:
+                return True
+
+        # z-score: 최근 거래량 분포 대비 오늘 거래량
+        if len(volumes) >= 5:
+            std = volumes.std()
+            if std > 0 and abs((volume - avg_vol) / std) >= zscore_threshold:
+                return True
+
+        return False
+    except Exception:
+        return True
+
+
 def get_stock_line(name, ticker):
     ename = html.escape(name)
     try:

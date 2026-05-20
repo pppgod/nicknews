@@ -78,7 +78,7 @@ def get_stock_line(name, ticker):
         volume = info.last_volume
         change = price - prev
         pct = change / prev * 100
-        arrow = "▲" if change >= 0 else "▼"
+        arrow = "📈" if change >= 0 else "📉"
 
         hist = stock.history(period="5d")
         closes = hist.get("Close", pd.Series(dtype=float))
@@ -87,11 +87,11 @@ def get_stock_line(name, ticker):
         def _change_str(current, past):
             if past > 0:
                 p = (current - past) / past * 100
-                a = "▲" if p >= 0 else "▼"
+                a = "📈" if p >= 0 else "📉"
                 return f"{a}{p:+.2f}%"
             return None
 
-        price_parts = [f"전일 {pct:+.2f}%"]
+        price_parts = [f"전일 {arrow}{pct:+.2f}%"]
         if len(closes) >= 5 and (s := _change_str(price, closes.iloc[0])):
             price_parts.append(f"1주전 {s}")
         price_str = "  ".join(price_parts)
@@ -122,26 +122,33 @@ def get_stock_detail(name, ticker):
         hist = stock.history(period="3mo")
         closes = hist["Close"]
 
+        volumes = hist["Volume"]
         prev_close = closes.iloc[-1]
         today_pct = (current - prev_close) / prev_close * 100
-        today_arrow = "▲" if today_pct >= 0 else "▼"
+        today_arrow = "📈" if today_pct >= 0 else "📉"
+
+        if len(volumes) >= 1 and volumes.iloc[-1] > 0:
+            prev_vol = volumes.iloc[-1]
+            vol_pct = (volume - prev_vol) / prev_vol * 100
+            va = "📈" if vol_pct >= 0 else "📉"
+            vol_str = f"{va} {_format_volume(volume)}  ({vol_pct:+.2f}%)"
+        else:
+            vol_str = _format_volume(volume)
 
         lines = [
             f"📊 <b>{ename}</b> ({eticker})\n",
             f"현재가  {today_arrow} {current:,.0f}  ({today_pct:+.2f}%)",
-            f"거래량  {_format_volume(volume)}\n",
+            f"거래량  {vol_str}\n",
             "📅 기간별 등락",
         ]
 
-        volumes = hist["Volume"]
-
         def _period_line(label, past_price, past_vol):
             price_pct = (current - past_price) / past_price * 100
-            pa = "▲" if price_pct >= 0 else "▼"
+            pa = "📈" if price_pct >= 0 else "📉"
             base = f"  {label}  {past_price:,.0f}  {pa} {price_pct:+.2f}%"
             if past_vol > 0:
                 vol_pct = (volume - past_vol) / past_vol * 100
-                va = "▲" if vol_pct >= 0 else "▼"
+                va = "📈" if vol_pct >= 0 else "📉"
                 return f"{base}   거래량 {_format_volume(past_vol)}  {va} {vol_pct:+.2f}%"
             return f"{base}   거래량 {_format_volume(past_vol)}"
 

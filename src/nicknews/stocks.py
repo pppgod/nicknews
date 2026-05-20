@@ -45,13 +45,20 @@ def _search_yahoo(query):
 def search_ticker(query):
     try:
         if any("가" <= c <= "힣" for c in query):
-            return _search_naver(query)
+            ticker, name = _search_naver(query)
+            if ticker and not ticker.split(".")[0].isdigit():
+                yahoo_ticker, yahoo_name = _search_yahoo(ticker.split(".")[0])
+                if yahoo_ticker:
+                    return yahoo_ticker, yahoo_name
+            return ticker, name
         return _search_yahoo(query)
     except Exception:
         return None, None
 
 
 def get_market(ticker):
+    if ticker.endswith((".KS", ".KQ")):
+        return "kr"
     try:
         info = yf.Ticker(ticker).info
         exchange = info.get("exchange", "")

@@ -73,6 +73,22 @@ class TestSearchTickerKorean:
             search_ticker("삼성전자")
         assert mock_get.call_count == 1
 
+    def test_foreign_stock_korean_name_redirects_to_yahoo(self):
+        naver_resp = _naver_response([{"code": "PFE", "name": "화이자", "typeCode": "KOSDAQ"}])
+        yahoo_resp = _yahoo_response([{"symbol": "PFE", "shortname": "Pfizer Inc.", "quoteType": "EQUITY"}])
+        with patch("nicknews.stocks.requests.get", side_effect=[naver_resp, yahoo_resp]):
+            ticker, name = search_ticker("화이자")
+        assert ticker == "PFE"
+        assert name == "Pfizer Inc."
+
+    def test_foreign_stock_yahoo_fallback_fails_returns_naver_result(self):
+        naver_resp = _naver_response([{"code": "PFE", "name": "화이자", "typeCode": "KOSDAQ"}])
+        yahoo_resp = _yahoo_response([])
+        with patch("nicknews.stocks.requests.get", side_effect=[naver_resp, yahoo_resp]):
+            ticker, name = search_ticker("화이자")
+        assert ticker == "PFE.KQ"
+        assert name == "화이자"
+
 
 class TestSearchTickerEnglish:
     def test_english_query_calls_yahoo_api(self):
@@ -116,20 +132,25 @@ class TestSearchTickerEnglish:
 # --- get_market ---
 
 class TestGetMarket:
-    def test_kospi_exchange_returns_kr(self):
+    def test_ks_suffix_returns_kr_without_yfinance(self):
         with patch("nicknews.stocks.yf.Ticker") as mock_yf:
-            mock_yf.return_value.info = {"exchange": "KSC"}
             assert get_market("005930.KS") == "kr"
+            mock_yf.assert_not_called()
 
-    def test_kosdaq_exchange_returns_kr(self):
+    def test_kq_suffix_returns_kr_without_yfinance(self):
         with patch("nicknews.stocks.yf.Ticker") as mock_yf:
-            mock_yf.return_value.info = {"exchange": "KOE"}
-            assert get_market("035720.KS") == "kr"
+            assert get_market("035420.KQ") == "kr"
+            mock_yf.assert_not_called()
 
     def test_nasdaq_exchange_returns_us(self):
         with patch("nicknews.stocks.yf.Ticker") as mock_yf:
             mock_yf.return_value.info = {"exchange": "NMS"}
             assert get_market("AAPL") == "us"
+
+    def test_kospi_exchange_via_yfinance_returns_kr(self):
+        with patch("nicknews.stocks.yf.Ticker") as mock_yf:
+            mock_yf.return_value.info = {"exchange": "KSC"}
+            assert get_market("KRX_STOCK") == "kr"
 
     def test_error_returns_us(self):
         with patch("nicknews.stocks.yf.Ticker", side_effect=Exception("network error")):

@@ -2,7 +2,10 @@ import json
 
 import pytest
 
-from nicknews.storage import all_user_ids, load_user_stocks, save_user_stocks
+from nicknews.storage import (
+    add_allowed_id, all_user_ids, load_allowed_ids,
+    load_user_stocks, remove_allowed_id, save_user_stocks,
+)
 
 
 @pytest.fixture
@@ -78,3 +81,33 @@ class TestAllUserIds:
         ids = all_user_ids()
         assert "111" in ids
         assert "222" in ids
+
+    def test_does_not_include_internal_keys(self, stocks_file, owner_env):
+        add_allowed_id("333")
+        ids = all_user_ids()
+        assert "_allowed" not in ids
+
+
+class TestAllowedIds:
+    def test_empty_by_default(self, stocks_file):
+        assert load_allowed_ids() == set()
+
+    def test_add_allowed_id(self, stocks_file):
+        add_allowed_id("222")
+        assert "222" in load_allowed_ids()
+
+    def test_add_multiple_ids(self, stocks_file):
+        add_allowed_id("222")
+        add_allowed_id("333")
+        allowed = load_allowed_ids()
+        assert "222" in allowed
+        assert "333" in allowed
+
+    def test_remove_allowed_id(self, stocks_file):
+        add_allowed_id("222")
+        remove_allowed_id("222")
+        assert "222" not in load_allowed_ids()
+
+    def test_remove_nonexistent_id_is_safe(self, stocks_file):
+        remove_allowed_id("999")
+        assert load_allowed_ids() == set()

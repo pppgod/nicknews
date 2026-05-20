@@ -4,7 +4,10 @@ import time
 import requests
 from datetime import datetime
 
-from .storage import load_user_stocks, save_user_stocks, all_user_ids
+from .storage import (
+    load_user_stocks, save_user_stocks, all_user_ids,
+    load_allowed_ids, add_allowed_id, remove_allowed_id,
+)
 from .news import fetch_rss, fetch_keyword_news, format_section, TECH_FEEDS, ECONOMY_FEEDS
 from .stocks import search_ticker, get_market, get_stock_line, get_stock_detail
 
@@ -191,6 +194,33 @@ def cmd_stock(parts, chat_id=None):
     send_message(get_stock_detail(name, ticker), chat_id)
 
 
+def cmd_allow(parts, chat_id=None):
+    if not _is_owner(chat_id):
+        send_message("❌ 관리자 전용 명령어입니다.", chat_id)
+        return
+    if len(parts) < 2:
+        send_message("사용법: /allow <chat_id>", chat_id)
+        return
+    target = parts[1]
+    add_allowed_id(target)
+    send_message(f"✅ 허용 추가: <code>{html.escape(target)}</code>", chat_id)
+
+
+def cmd_disallow(parts, chat_id=None):
+    if not _is_owner(chat_id):
+        send_message("❌ 관리자 전용 명령어입니다.", chat_id)
+        return
+    if len(parts) < 2:
+        send_message("사용법: /disallow <chat_id>", chat_id)
+        return
+    target = parts[1]
+    if _is_owner(target):
+        send_message("❌ 관리자 자신은 제거할 수 없습니다.", chat_id)
+        return
+    remove_allowed_id(target)
+    send_message(f"✅ 허용 제거: <code>{html.escape(target)}</code>", chat_id)
+
+
 def cmd_help(_, chat_id=None):
     send_message(
         "📖 <b>명령어 안내</b>\n\n"
@@ -224,6 +254,8 @@ COMMANDS = {
     "/kr": cmd_kr,
     "/us": cmd_us,
     "/stock": cmd_stock,
+    "/allow": cmd_allow,
+    "/disallow": cmd_disallow,
     "/help": cmd_help,
 }
 
@@ -238,10 +270,13 @@ def handle_command(text, chat_id=None):
         handler(parts, chat_id)
 
 
+def _is_owner(chat_id) -> bool:
+    return str(chat_id) == str(os.getenv("TELEGRAM_CHAT_ID", ""))
+
+
 def _allowed_ids():
     owner = os.getenv("TELEGRAM_CHAT_ID", "")
-    extra = os.getenv("ALLOWED_CHAT_IDS", "")
-    return {owner} | {c.strip() for c in extra.split(",") if c.strip()}
+    return {owner} | load_allowed_ids()
 
 
 def poll_messages():

@@ -4,6 +4,8 @@ import pytest
 
 from nicknews.telegram import (
     cmd_add,
+    cmd_allow,
+    cmd_disallow,
     cmd_kr,
     cmd_list,
     cmd_news,
@@ -251,3 +253,47 @@ class TestHandleCommand:
         with patch("nicknews.telegram.send_message") as mock_send:
             handle_command("/HELP")
         mock_send.assert_called_once()
+
+
+class TestCmdAllow:
+    def test_non_owner_is_rejected(self):
+        with patch("nicknews.telegram.send_message") as mock_send, \
+             patch("nicknews.telegram._is_owner", return_value=False):
+            cmd_allow(["/allow", "999"], "456")
+        assert "관리자" in mock_send.call_args[0][0]
+
+    def test_no_args_sends_usage(self):
+        with patch("nicknews.telegram.send_message") as mock_send, \
+             patch("nicknews.telegram._is_owner", return_value=True):
+            cmd_allow(["/allow"], "111")
+        assert "사용법" in mock_send.call_args[0][0]
+
+    def test_owner_can_add_user(self):
+        with patch("nicknews.telegram.send_message") as mock_send, \
+             patch("nicknews.telegram._is_owner", return_value=True), \
+             patch("nicknews.telegram.add_allowed_id") as mock_add:
+            cmd_allow(["/allow", "999"], "111")
+        mock_add.assert_called_once_with("999")
+        assert "✅" in mock_send.call_args[0][0]
+
+
+class TestCmdDisallow:
+    def test_non_owner_is_rejected(self):
+        with patch("nicknews.telegram.send_message") as mock_send, \
+             patch("nicknews.telegram._is_owner", return_value=False):
+            cmd_disallow(["/disallow", "999"], "456")
+        assert "관리자" in mock_send.call_args[0][0]
+
+    def test_cannot_remove_owner(self):
+        with patch("nicknews.telegram.send_message") as mock_send, \
+             patch("nicknews.telegram._is_owner", side_effect=lambda x: x == "111"):
+            cmd_disallow(["/disallow", "111"], "111")
+        assert "관리자 자신" in mock_send.call_args[0][0]
+
+    def test_owner_can_remove_user(self):
+        with patch("nicknews.telegram.send_message") as mock_send, \
+             patch("nicknews.telegram._is_owner", side_effect=lambda x: x == "111"), \
+             patch("nicknews.telegram.remove_allowed_id") as mock_remove:
+            cmd_disallow(["/disallow", "999"], "111")
+        mock_remove.assert_called_once_with("999")
+        assert "✅" in mock_send.call_args[0][0]

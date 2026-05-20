@@ -47,8 +47,29 @@ def save_user_stocks(chat_id: str, user_data: dict):
 
 def all_user_ids() -> set:
     data = _migrate_if_needed(_load_all())
-    ids = set(data.keys())
+    ids = set(k for k in data.keys() if not k.startswith("_"))
     owner = os.getenv("TELEGRAM_CHAT_ID", "")
     if owner:
         ids.add(owner)
     return ids
+
+
+def load_allowed_ids() -> set:
+    data = _load_all()
+    return set(data.get("_allowed", []))
+
+
+def add_allowed_id(chat_id: str):
+    data = _migrate_if_needed(_load_all())
+    allowed = set(data.get("_allowed", []))
+    allowed.add(str(chat_id))
+    data["_allowed"] = sorted(allowed)
+    _save_all(data)
+
+
+def remove_allowed_id(chat_id: str):
+    data = _migrate_if_needed(_load_all())
+    allowed = set(data.get("_allowed", []))
+    allowed.discard(str(chat_id))
+    data["_allowed"] = sorted(allowed)
+    _save_all(data)

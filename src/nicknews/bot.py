@@ -1,33 +1,10 @@
 import os
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
-import exchange_calendars as xcals
-import pandas as pd
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 
+from .market import is_kr_market_open, is_us_market_open
 from .notify import send_daily_news, send_kr_stocks, send_us_stocks
 from .telegram import poll_messages
-
-KST = ZoneInfo("Asia/Seoul")
-# ZoneInfo("America/New_York") switches between EST(UTC-5) and EDT(UTC-4) automatically
-EST = ZoneInfo("America/New_York")
-
-_KR_CAL = xcals.get_calendar("XKRX")
-_US_CAL = xcals.get_calendar("XNYS")
-
-
-def is_kr_market_open(now=None):
-    if now is None:
-        now = datetime.now(KST)
-    return bool(_KR_CAL.is_open_at_time(pd.Timestamp(now)))
-
-
-def is_us_market_open(now=None):
-    if now is None:
-        now = datetime.now(EST)
-    return bool(_US_CAL.is_open_at_time(pd.Timestamp(now)))
 
 
 def _send_kr_if_open():

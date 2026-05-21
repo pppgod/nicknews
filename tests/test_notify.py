@@ -56,7 +56,8 @@ class TestSendKrStocks:
              patch("nicknews.notify.all_user_ids", return_value={"111"}), \
              patch("nicknews.notify.load_user_stocks", return_value=stocks), \
              patch("nicknews.notify.get_stock_line", return_value=""), \
-             patch("nicknews.notify.is_significant", return_value=True):
+             patch("nicknews.notify.is_significant", return_value=True), \
+             patch("nicknews.notify.is_kr_market_open", return_value=True):
             send_kr_stocks(intraday=True)
         assert "장 중" in mock_send.call_args[0][0]
 
@@ -65,7 +66,8 @@ class TestSendKrStocks:
         with patch("nicknews.notify.send_message", return_value={"ok": True}) as mock_send, \
              patch("nicknews.notify.all_user_ids", return_value={"111"}), \
              patch("nicknews.notify.load_user_stocks", return_value=stocks), \
-             patch("nicknews.notify.get_stock_line", return_value=""):
+             patch("nicknews.notify.get_stock_line", return_value=""), \
+             patch("nicknews.notify.is_kr_market_open", return_value=False):
             send_kr_stocks(intraday=False)
         assert "마감" in mock_send.call_args[0][0]
 
@@ -93,7 +95,8 @@ class TestSendUsStocks:
              patch("nicknews.notify.all_user_ids", return_value={"111"}), \
              patch("nicknews.notify.load_user_stocks", return_value=stocks), \
              patch("nicknews.notify.get_stock_line", return_value=""), \
-             patch("nicknews.notify.is_significant", return_value=True):
+             patch("nicknews.notify.is_significant", return_value=True), \
+             patch("nicknews.notify.is_us_market_open", return_value=True):
             send_us_stocks(intraday=True)
         assert "장 중" in mock_send.call_args[0][0]
 

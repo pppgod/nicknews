@@ -1,6 +1,7 @@
 import html
 from datetime import datetime
 
+from .market import is_kr_market_open, is_us_market_open
 from .sender import send_message
 from .storage import load_user_stocks, all_user_ids
 from .news import fetch_rss, fetch_keyword_news, format_section, TECH_FEEDS, ECONOMY_FEEDS
@@ -39,7 +40,7 @@ def send_daily_news(chat_id=None):
 def send_kr_stocks(intraday=False, chat_id=None):
     targets = [chat_id] if chat_id else list(all_user_ids())
     today = datetime.now().strftime("%Y년 %m월 %d일")
-    header = "코스피 장 중" if intraday else "코스피 마감"
+    header = "코스피 장 중" if is_kr_market_open() else "코스피 마감"
     for uid in targets:
         stocks = load_user_stocks(uid)["kr"]
         if intraday:
@@ -59,7 +60,7 @@ def send_kr_stocks(intraday=False, chat_id=None):
 def send_us_stocks(intraday=False, chat_id=None):
     targets = [chat_id] if chat_id else list(all_user_ids())
     today = datetime.now().strftime("%Y년 %m월 %d일")
-    header = "나스닥 장 중" if intraday else "나스닥 마감"
+    header = "나스닥 장 중" if is_us_market_open() else "나스닥 마감"
     for uid in targets:
         stocks = load_user_stocks(uid)["us"]
         if intraday:

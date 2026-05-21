@@ -1,7 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from nicknews.bot import is_kr_market_open, is_us_market_open
+from nicknews.market import is_kr_market_open, is_us_market_open
 
 KST = ZoneInfo("Asia/Seoul")
 EST = ZoneInfo("America/New_York")

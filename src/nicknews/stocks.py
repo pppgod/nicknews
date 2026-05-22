@@ -79,7 +79,7 @@ def _arrow(v):
     return "🔺" if v >= 0 else "▼"
 
 
-def is_significant(ticker, price_threshold=2.0, vol_threshold=1.5, zscore_threshold=2.0):
+def is_significant(ticker, price_threshold=2.0, vol_threshold=1.2, zscore_threshold=2.0):
     """장중 알림 필터: 임계값 또는 z-score 기준 중 하나라도 충족하면 True."""
     try:
         stock = yf.Ticker(ticker)

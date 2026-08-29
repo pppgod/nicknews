@@ -3,9 +3,10 @@ from datetime import datetime
 
 from .market import is_kr_market_open, is_us_market_open
 from .sender import send_message
-from .storage import load_user_stocks, all_user_ids
+from .storage import load_user_stocks, save_user_stocks, all_user_ids
 from .news import fetch_rss, fetch_keyword_news, format_section, TECH_FEEDS, ECONOMY_FEEDS
 from .stocks import get_stock_line, is_significant
+from .flights import get_flight_price, record_price, format_flight_price_message, route_label
 
 
 def _news_message(chat_id):
@@ -75,3 +76,30 @@ def send_us_stocks(intraday=False, chat_id=None):
             print(f"[{datetime.now().strftime('%H:%M:%S')}] 나스닥 전송 완료 → {uid}")
         else:
             print(f"나스닥 전송 실패 → {uid}: {result}")
+
+
+def send_flight_prices(chat_id=None):
+    targets = [chat_id] if chat_id else list(all_user_ids())
+    for uid in targets:
+        data = load_user_stocks(uid)
+        flights = data.get("flights", [])
+        if not flights:
+            continue
+        changed = False
+        for flight in flights:
+            fare = get_flight_price(flight)
+            if fare is None:
+                print(f"항공권 가격 조회 실패 → {uid}: {route_label(flight)}")
+                continue
+
+            message = format_flight_price_message(flight, fare)
+            send_result = send_message(message, uid)
+            if send_result.get("ok"):
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] 항공권 가격 전송 완료 → {uid}: {route_label(flight)}")
+            else:
+                print(f"항공권 가격 전송 실패 → {uid}: {send_result}")
+
+            record_price(flight, fare["price"])
+            changed = True
+        if changed:
+            save_user_stocks(uid, data)

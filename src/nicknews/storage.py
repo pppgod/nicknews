@@ -6,7 +6,7 @@ STOCKS_FILE = os.getenv(
     os.path.join(os.getcwd(), "stocks.json"),
 )
 
-_EMPTY = {"kr": [], "us": [], "keywords": []}
+_EMPTY = {"kr": [], "us": [], "keywords": [], "flights": []}
 
 
 def _load_all() -> dict:
@@ -36,6 +36,8 @@ def load_user_stocks(chat_id: str) -> dict:
     user = dict(data.get(str(chat_id), _EMPTY))
     if "keywords" not in user:
         user["keywords"] = []
+    if "flights" not in user:
+        user["flights"] = []
     return user
 
 

@@ -19,7 +19,7 @@ dependencies = [
 nicknews = "nicknews.bot:main"
 
 [project.optional-dependencies]
-dev = ["ruff", "pytest", "pytest-cov"]
+dev = ["ruff==0.15.13", "pytest", "pytest-cov"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

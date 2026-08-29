@@ -3,7 +3,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 
 from .market import is_kr_market_open, is_us_market_open
-from .notify import send_daily_news, send_kr_stocks, send_us_stocks
+from .notify import send_daily_news, send_kr_stocks, send_us_stocks, send_flight_prices
 from .telegram import poll_messages
 
 
@@ -29,13 +29,15 @@ def main():
     scheduler.add_job(send_us_stocks, "cron", hour=5, minute=5)
     scheduler.add_job(_send_kr_if_open, "cron", minute="0,30", timezone="Asia/Seoul")
     scheduler.add_job(_send_us_if_open, "cron", minute="0,30", timezone="Asia/Seoul")
+    scheduler.add_job(send_flight_prices, "cron", hour=14, minute=0)
     scheduler.start()
 
     print("봇 실행 중 — 종료: Ctrl+C")
     print("  뉴스: 매일 09:00")
     print("  코스피 마감: 매일 15:35 / 장 중 30분마다 (공휴일·대체공휴일 제외)")
     print("  나스닥 마감: 매일 05:05 / 장 중 30분마다 (NYSE 휴장일·조기폐장 반영)")
-    print("  명령어: /add /remove /watch /unwatch /list /help /news /kr /us /stock")
+    print("  항공권 가격: 매일 14:00")
+    print("  명령어: /add /remove /watch /unwatch /list /addflight /removeflight /flights /help /news /kr /us /stock")
 
     poll_messages()
 

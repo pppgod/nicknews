@@ -4,12 +4,16 @@ import pytest
 
 from nicknews.commands import (
     cmd_add,
+    cmd_addflight,
     cmd_allow,
     cmd_disallow,
+    cmd_flight,
+    cmd_flights,
     cmd_kr,
     cmd_list,
     cmd_news,
     cmd_remove,
+    cmd_removeflight,
     cmd_stock,
     cmd_unwatch,
     cmd_us,
@@ -18,6 +22,10 @@ from nicknews.commands import (
 )
 
 DEFAULT_DATA = {"kr": [], "us": [], "keywords": []}
+
+
+def _default_flight_data():
+    return {"kr": [], "us": [], "keywords": [], "flights": []}
 
 
 def _messages(mock_send):
@@ -263,6 +271,184 @@ class TestHandleCommand:
         with patch("nicknews.commands.send_message") as mock_send:
             handle_command("/HELP")
         mock_send.assert_called_once()
+
+
+class TestCmdAddflight:
+    RESOLVED = ("ICN", "인천", "NRT", "나리타")
+
+    def test_too_few_args_sends_usage(self):
+        with patch("nicknews.commands.send_message") as mock_send:
+            cmd_addflight(["/addflight", "인천", "도쿄"])
+        assert "사용법" in mock_send.call_args[0][0]
+
+    def test_invalid_depart_date_sends_error(self):
+        with patch("nicknews.commands.send_message") as mock_send:
+            cmd_addflight(["/addflight", "인천", "도쿄", "abc"])
+        assert any("가는 날짜" in m for m in _messages(mock_send))
+
+    def test_past_depart_date_rejected(self):
+        with patch("nicknews.commands.send_message") as mock_send:
+            cmd_addflight(["/addflight", "인천", "도쿄", "200101"])
+        assert any("이미 지났습니다" in m for m in _messages(mock_send))
+
+    def test_invalid_return_date_sends_error(self):
+        with patch("nicknews.commands.send_message") as mock_send:
+            cmd_addflight(["/addflight", "인천", "도쿄", "260901", "abc"])
+        assert any("오는 날짜" in m for m in _messages(mock_send))
+
+    def test_return_before_depart_rejected(self):
+        with patch("nicknews.commands.send_message") as mock_send:
+            cmd_addflight(["/addflight", "인천", "도쿄", "260908", "260901"])
+        assert any("가는 날짜보다 빠릅니다" in m for m in _messages(mock_send))
+
+    def test_airport_not_found_sends_error(self):
+        with patch("nicknews.commands.send_message") as mock_send, \
+             patch("nicknews.commands.resolve_route", return_value=None):
+            cmd_addflight(["/addflight", "없는곳", "도쿄", "260901"])
+        assert any("공항을 찾을 수 없습니다" in m for m in _messages(mock_send))
+
+    def test_success_saves_flight_and_history(self):
+        with patch("nicknews.commands.send_message"), \
+             patch("nicknews.commands.resolve_route", return_value=self.RESOLVED), \
+             patch("nicknews.commands.get_flight_price", return_value={"price": 380000, "offers": []}), \
+             patch("nicknews.commands.load_user_stocks", return_value=_default_flight_data()), \
+             patch("nicknews.commands.save_user_stocks") as mock_save:
+            cmd_addflight(["/addflight", "인천", "도쿄", "260901", "260908"])
+        saved = mock_save.call_args[0][1]
+        flight = saved["flights"][0]
+        assert flight["origin"] == "ICN"
+        assert flight["destination"] == "NRT"
+        assert flight["depart"] == "260901"
+        assert flight["return"] == "260908"
+        assert flight["history"] == [{"date": flight["history"][0]["date"], "price": 380000}]
+
+    def test_one_way_has_no_return(self):
+        with patch("nicknews.commands.send_message"), \
+             patch("nicknews.commands.resolve_route", return_value=self.RESOLVED), \
+             patch("nicknews.commands.get_flight_price", return_value={"price": 100000, "offers": []}), \
+             patch("nicknews.commands.load_user_stocks", return_value=_default_flight_data()), \
+             patch("nicknews.commands.save_user_stocks") as mock_save:
+            cmd_addflight(["/addflight", "인천", "도쿄", "260901"])
+        assert mock_save.call_args[0][1]["flights"][0]["return"] is None
+
+    def test_price_lookup_failure_still_saves_without_history(self):
+        with patch("nicknews.commands.send_message") as mock_send, \
+             patch("nicknews.commands.resolve_route", return_value=self.RESOLVED), \
+             patch("nicknews.commands.get_flight_price", return_value=None), \
+             patch("nicknews.commands.load_user_stocks", return_value=_default_flight_data()), \
+             patch("nicknews.commands.save_user_stocks") as mock_save:
+            cmd_addflight(["/addflight", "인천", "도쿄", "260901"])
+        assert mock_save.call_args[0][1]["flights"][0]["history"] == []
+        assert any("조회 실패" in m for m in _messages(mock_send))
+
+
+class TestCmdRemoveflight:
+    def test_no_args_sends_usage(self):
+        with patch("nicknews.commands.send_message") as mock_send:
+            cmd_removeflight(["/removeflight"])
+        assert "사용법" in mock_send.call_args[0][0]
+
+    def test_non_numeric_arg_sends_usage(self):
+        with patch("nicknews.commands.send_message") as mock_send:
+            cmd_removeflight(["/removeflight", "abc"])
+        assert "사용법" in mock_send.call_args[0][0]
+
+    def test_out_of_range_index_sends_error(self):
+        data = _default_flight_data()
+        with patch("nicknews.commands.send_message") as mock_send, \
+             patch("nicknews.commands.load_user_stocks", return_value=data):
+            cmd_removeflight(["/removeflight", "1"])
+        assert any("등록되지 않은 번호" in m for m in _messages(mock_send))
+
+    def test_removes_by_index(self):
+        flight = {"origin": "ICN", "origin_name": "인천", "destination": "NRT", "destination_name": "나리타"}
+        data = {"kr": [], "us": [], "keywords": [], "flights": [flight]}
+        with patch("nicknews.commands.send_message") as mock_send, \
+             patch("nicknews.commands.load_user_stocks", return_value=data), \
+             patch("nicknews.commands.save_user_stocks") as mock_save:
+            cmd_removeflight(["/removeflight", "1"])
+        assert mock_save.call_args[0][1]["flights"] == []
+        assert any("인천 → 나리타" in m for m in _messages(mock_send))
+
+
+class TestCmdFlights:
+    def test_empty_list_shows_message(self):
+        with patch("nicknews.commands.send_message") as mock_send, \
+             patch("nicknews.commands.load_user_stocks", return_value=_default_flight_data()):
+            cmd_flights(["/flights"])
+        assert "추적 중인 항공권이 없습니다" in mock_send.call_args[0][0]
+
+    def test_lists_registered_flights_with_last_price(self):
+        flight = {
+            "origin": "ICN", "origin_name": "인천", "destination": "NRT", "destination_name": "나리타",
+            "depart": "260901", "return": "260908",
+            "history": [{"date": "260828", "price": 380000}],
+        }
+        data = {"kr": [], "us": [], "keywords": [], "flights": [flight]}
+        with patch("nicknews.commands.send_message") as mock_send, \
+             patch("nicknews.commands.load_user_stocks", return_value=data):
+            cmd_flights(["/flights"])
+        msg = mock_send.call_args[0][0]
+        assert "인천 → 나리타" in msg
+        assert "380,000원" in msg
+
+    def test_no_history_shows_unconfirmed(self):
+        flight = {
+            "origin": "ICN", "origin_name": "인천", "destination": "NRT", "destination_name": "나리타",
+            "depart": "260901", "return": None, "history": [],
+        }
+        data = {"kr": [], "us": [], "keywords": [], "flights": [flight]}
+        with patch("nicknews.commands.send_message") as mock_send, \
+             patch("nicknews.commands.load_user_stocks", return_value=data):
+            cmd_flights(["/flights"])
+        assert "미확인" in mock_send.call_args[0][0]
+
+
+class TestCmdFlight:
+    def _flight(self, history=None):
+        return {
+            "origin": "ICN", "origin_name": "인천", "destination": "NRT", "destination_name": "나리타",
+            "depart": "260901", "return": "260908", "history": history or [],
+        }
+
+    def test_no_args_sends_usage(self):
+        with patch("nicknews.commands.send_message") as mock_send:
+            cmd_flight(["/flight"])
+        assert "사용법" in mock_send.call_args[0][0]
+
+    def test_non_numeric_arg_sends_usage(self):
+        with patch("nicknews.commands.send_message") as mock_send:
+            cmd_flight(["/flight", "abc"])
+        assert "사용법" in mock_send.call_args[0][0]
+
+    def test_out_of_range_index_sends_error(self):
+        data = _default_flight_data()
+        with patch("nicknews.commands.send_message") as mock_send, \
+             patch("nicknews.commands.load_user_stocks", return_value=data):
+            cmd_flight(["/flight", "1"])
+        assert any("등록되지 않은 번호" in m for m in _messages(mock_send))
+
+    def test_success_sends_price_and_saves_history(self):
+        data = {"kr": [], "us": [], "keywords": [], "flights": [self._flight()]}
+        with patch("nicknews.commands.send_message") as mock_send, \
+             patch("nicknews.commands.load_user_stocks", return_value=data), \
+             patch("nicknews.commands.get_flight_price", return_value={"price": 185400, "offers": []}), \
+             patch("nicknews.commands.save_user_stocks") as mock_save:
+            cmd_flight(["/flight", "1"])
+        assert any("조회 중" in m for m in _messages(mock_send))
+        assert any("185,400원" in m for m in _messages(mock_send))
+        saved_flight = mock_save.call_args[0][1]["flights"][0]
+        assert saved_flight["history"][-1]["price"] == 185400
+
+    def test_price_lookup_failure_sends_error_and_does_not_save(self):
+        data = {"kr": [], "us": [], "keywords": [], "flights": [self._flight()]}
+        with patch("nicknews.commands.send_message") as mock_send, \
+             patch("nicknews.commands.load_user_stocks", return_value=data), \
+             patch("nicknews.commands.get_flight_price", return_value=None), \
+             patch("nicknews.commands.save_user_stocks") as mock_save:
+            cmd_flight(["/flight", "1"])
+        assert any("조회 실패" in m for m in _messages(mock_send))
+        mock_save.assert_not_called()
 
 
 class TestCmdAllow:

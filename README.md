@@ -25,7 +25,21 @@ source venv/bin/activate
 ```env
 TELEGRAM_TOKEN=<YOUR_TELEGRAM_TOKEN>
 TELEGRAM_CHAT_ID=<YOUR_CHAT_ID>
+TRAVELPAYOUTS_TOKEN=<YOUR_TRAVELPAYOUTS_TOKEN>
 ```
+
+`TRAVELPAYOUTS_TOKEN`은 공항/도시명 검색(예: "인천" → `ICN`)에 쓰인다.
+[Travelpayouts](https://www.travelpayouts.com/)에 무료로 가입하면 프로필 > API 토큰 메뉴에서
+자동 발급된 토큰을 확인할 수 있다 (승인 절차 없음).
+
+가격 조회 자체는 네이버 항공권(`flight.naver.com`)이 자체적으로 쓰는 내부 API를 이용한다 (KRW,
+실시간). 별도 키가 필요 없지만 **비공식 API**라 네이버가 예고 없이 형식을 바꾸거나 막을 수 있다 —
+`/addflight` 응답이 "현재가 조회 실패"만 계속 뜨면 `src/nicknews/flights.py`의
+`search_flight_price`/`search_domestic_flight_price`를 확인해야 할 수 있다.
+
+국제선·국내선(예: 인천-제주) 둘 다 지원한다 — 국제선 API가 "국내선 전용 노선"이라고 거부하면
+자동으로 국내선 API로 재시도한다. 국내선은 왕복 시 가는편·오는편 최저가를 각각 조회해 합산한다
+(국제선처럼 왕복 묶음 운임이 아니라 편도 운임을 독립적으로 조합).
 
 ### 3. 패키지 설치
 
@@ -48,6 +62,7 @@ nicknews
 | 데일리 뉴스 | 09:00 |
 | 코스피 마감 | 15:35 |
 | 나스닥 마감 | 05:05 |
+| 항공권 가격 | 14:00 |
 
 ## 텔레그램 명령어
 
@@ -58,6 +73,9 @@ nicknews
 | `/watch <키워드>` | 관심 키워드 추가 |
 | `/unwatch <키워드>` | 관심 키워드 제거 |
 | `/list` | 전체 구독 목록 확인 |
+| `/addflight <출발지> <목적지> <가는날짜:yymmdd> [오는날짜:yymmdd]` | 항공권 가격 추적 등록 (편도는 오는날짜 생략) |
+| `/removeflight <번호>` | 항공권 추적 삭제 (`/flights`로 번호 확인) |
+| `/flights` | 추적 중인 항공권 목록 확인 |
 | `/help` | 명령어 안내 |
 
 **예시**
@@ -67,6 +85,9 @@ nicknews
 /watch 엔비디아
 /unwatch 인공지능
 /remove AAPL
+/addflight 인천 도쿄 260901 260908
+/addflight ICN NRT 260901
+/removeflight 1
 ```
 
 ## 서버 배포 (gh CLI)
@@ -107,6 +128,7 @@ python3 -m venv venv
 cat > ~/nicknews/.env << 'EOF'
 TELEGRAM_TOKEN=<YOUR_TELEGRAM_TOKEN>
 TELEGRAM_CHAT_ID=<YOUR_CHAT_ID>
+TRAVELPAYOUTS_TOKEN=<YOUR_TRAVELPAYOUTS_TOKEN>
 EOF
 ```
 

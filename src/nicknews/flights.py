@@ -222,34 +222,180 @@ def _extract_fare_offers(data):
     return {"price": overall_min, "offers": offers}
 
 
+def _read_sse(res, completed_key):
+    """이미 연 스트리밍 응답에서 마지막(완료) 이벤트의 파싱된 데이터를 읽어온다."""
+    res.encoding = "utf-8"
+    last = None
+    for line in res.iter_lines(decode_unicode=True):
+        if not line or not line.startswith("data:"):
+            continue
+        try:
+            data = json.loads(line[len("data:"):].strip())
+        except Exception:
+            continue
+        last = data
+        if data.get("status", {}).get(completed_key):
+            break
+    return last
+
+
+def _post_sse(url, headers, payload, completed_key):
+    """SSE 스트리밍 POST 요청 -> 마지막(완료) 이벤트의 파싱된 데이터, 실패 시 None."""
+    res = requests.post(url, headers=headers, json=payload, timeout=(10, 25), stream=True)
+    if res.status_code not in (200, 201):
+        return None
+    return _read_sse(res, completed_key)
+
+
+def _is_domestic_only_error(res) -> bool:
+    """국제선 API가 국내선 전용 노선(예: 인천-제주)을 거부할 때의 400 응답인지 확인."""
+    try:
+        return "domestic airports" in res.json().get("message", {}).get("message", "")
+    except Exception:
+        return False
+
+
 def search_flight_price(origin, destination, depart_date: date, return_date: date = None):
     """편도/왕복 가격 조회. {"price": 전체 최저가, "offers": [항공사별 최저가 상위 목록]}
-    또는 실패 시 None."""
+    또는 실패 시 None. 국내선 전용 노선이면 자동으로 도메스틱 API로 넘어간다."""
     try:
         headers = dict(_NAVER_HEADERS)
         headers["referer"] = _naver_referer(origin, destination, depart_date, return_date)
         payload = _naver_payload(origin, destination, depart_date, return_date)
 
         res = requests.post(NAVER_SEARCH_URL, headers=headers, json=payload, timeout=(10, 25), stream=True)
+        if res.status_code == 400 and _is_domestic_only_error(res):
+            return search_domestic_flight_price(origin, destination, depart_date, return_date)
         if res.status_code not in (200, 201):
             return None
-        res.encoding = "utf-8"
 
-        last = None
-        for line in res.iter_lines(decode_unicode=True):
-            if not line or not line.startswith("data:"):
-                continue
-            try:
-                data = json.loads(line[len("data:"):].strip())
-            except Exception:
-                continue
-            last = data
-            if data.get("status", {}).get("isCompleted"):
-                break
-
+        last = _read_sse(res, "isCompleted")
         if not last:
             return None
         return _extract_fare_offers(last)
+    except Exception:
+        return None
+
+
+# --- 국내선 (SEL/CJU 등 국내 공항 전용 노선) ---
+# 국제선과 API·응답 스키마가 완전히 분리되어 있고, 왕복은 가는편/오는편을 각각
+# 독립적으로 조회해야 한다 (국제선처럼 왕복 묶음 운임이 아니라 편도 운임의 합).
+NAVER_DOMESTIC_URL = "https://flight-api.naver.com/flight/domestic/searchFlights"
+
+# 국내선 API는 서울 지역을 공항 단위(ICN)가 아니라 도시 단위(SEL, 김포·인천 통합)로만 인식한다
+# — ICN을 그대로 넘기면 결과가 0건이라 SEL로 치환해서 보낸다.
+_DOMESTIC_CODE_ALIASES = {"ICN": "SEL"}
+
+
+def _to_domestic_code(code: str) -> str:
+    return _DOMESTIC_CODE_ALIASES.get(code, code)
+
+
+def _domestic_payload(origin, destination, depart_date: date, return_date: date, leg_filter: str):
+    itineraries = [{
+        "departureAirport": origin, "arrivalAirport": destination,
+        "departureDate": depart_date.strftime("%Y%m%d"),
+    }]
+    if return_date:
+        itineraries.append({
+            "departureAirport": destination, "arrivalAirport": origin,
+            "departureDate": return_date.strftime("%Y%m%d"),
+        })
+    return {
+        "type": "domestic", "device": "pc", "fareType": "Y",
+        "itineraries": itineraries,
+        "person": {"adult": 1, "child": 0, "infant": 0},
+        "tripType": "RT" if return_date else "OW",
+        "flightFilter": {
+            "filter": {"type": leg_filter}, "limit": 50, "skip": 0,
+            "sort": {"segment.departure.time": 1, "minFare": 1},
+        },
+        "initialRequest": True,
+    }
+
+
+def _domestic_referer(origin, destination, depart_date: date, return_date: date = None):
+    path = f"{origin}-{destination}-{depart_date.strftime('%Y%m%d')}"
+    if return_date:
+        path += f"/{destination}-{origin}-{return_date.strftime('%Y%m%d')}"
+    return f"https://flight.naver.com/flights/domestic/{path}?adult=1&fareType=Y"
+
+
+def _group_domestic_flights_by_airline(flights_list, max_per_airline=MAX_OFFERS_PER_AIRLINE):
+    """국내선 flights 목록 -> {항공사코드: [{"price","label"}, ...]} (편별 최저가순 상위 N개)."""
+    by_airline = {}
+    for f in flights_list:
+        segment = f.get("segment", {})
+        code = segment.get("airlineCode")
+        price = f.get("minFare")
+        if not code or price is None:
+            continue
+        label = _itinerary_time_label({"segments": [segment]})
+        by_airline.setdefault(code, []).append({"price": price, "label": label})
+    for code, items in by_airline.items():
+        items.sort(key=lambda x: x["price"])
+        by_airline[code] = items[:max_per_airline]
+    return by_airline
+
+
+def search_domestic_flight_price(origin, destination, depart_date: date, return_date: date = None):
+    """국내선 편도/왕복 가격 조회. 왕복은 가는편·오는편 최저가 조합을 항공사별로 계산한다."""
+    try:
+        origin, destination = _to_domestic_code(origin), _to_domestic_code(destination)
+        headers = dict(_NAVER_HEADERS)
+        headers["referer"] = _domestic_referer(origin, destination, depart_date, return_date)
+
+        dep_payload = _domestic_payload(origin, destination, depart_date, return_date, "departure")
+        dep_data = _post_sse(NAVER_DOMESTIC_URL, headers, dep_payload, "isComplete")
+        if not dep_data:
+            return None
+        status = dep_data.get("status", {})
+        airline_map = status.get("airlinesCodeMap", {})
+        dep_price = status.get("departure", {}).get("price", {}).get("min")
+        if not dep_price:
+            return None
+        dep_by_airline = _group_domestic_flights_by_airline(dep_data.get("flights", []))
+
+        if not return_date:
+            offers_by_airline = {
+                code: [{"price": o["price"], "depart_label": o["label"], "return_label": None} for o in items]
+                for code, items in dep_by_airline.items()
+            }
+            overall_min = dep_price
+        else:
+            arr_payload = _domestic_payload(origin, destination, depart_date, return_date, "arrival")
+            arr_data = _post_sse(NAVER_DOMESTIC_URL, headers, arr_payload, "isComplete")
+            if not arr_data:
+                return None
+            arr_price = arr_data.get("status", {}).get("arrival", {}).get("price", {}).get("min")
+            if not arr_price:
+                return None
+            arr_by_airline = _group_domestic_flights_by_airline(arr_data.get("flights", []))
+            overall_min = dep_price + arr_price
+
+            offers_by_airline = {}
+            for code in set(dep_by_airline) & set(arr_by_airline):
+                combos = [
+                    {"price": d["price"] + a["price"], "depart_label": d["label"], "return_label": a["label"]}
+                    for d in dep_by_airline[code] for a in arr_by_airline[code]
+                ]
+                combos.sort(key=lambda c: c["price"])
+                offers_by_airline[code] = combos[:MAX_OFFERS_PER_AIRLINE]
+
+        if not offers_by_airline:
+            return {"price": overall_min, "offers": []}
+
+        ordered_codes = sorted(
+            offers_by_airline,
+            key=lambda c: (c != PRIORITY_AIRLINE_CODE, offers_by_airline[c][0]["price"]),
+        )
+        offers = []
+        for code in ordered_codes:
+            name = airline_map.get(code, code)
+            for o in offers_by_airline[code]:
+                offers.append({"airline": name, **o})
+
+        return {"price": overall_min, "offers": offers}
     except Exception:
         return None
 

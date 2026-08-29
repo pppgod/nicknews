@@ -8,6 +8,9 @@ from nicknews.flights import (
     _change_str,
     _closest_entry,
     _extract_fare_offers,
+    _group_domestic_flights_by_airline,
+    _is_domestic_only_error,
+    _to_domestic_code,
     date_label,
     format_flight_price_message,
     format_yymmdd,
@@ -17,6 +20,7 @@ from nicknews.flights import (
     resolve_route,
     route_label,
     search_airport,
+    search_domestic_flight_price,
     search_flight_price,
 )
 
@@ -63,6 +67,41 @@ def _naver_response(status_code, price=None, completed=True, airline_code=None, 
     else:
         m.iter_lines.return_value = []
     return m
+
+
+def _domestic_error_response():
+    m = MagicMock()
+    m.status_code = 400
+    m.json.return_value = {"message": {"message": "Invalid request: All routes are domestic airports"}}
+    return m
+
+
+def _domestic_sse_response(status_code, dep_price=None, arr_price=None, flights=None, completed=True):
+    m = MagicMock()
+    m.status_code = status_code
+    if dep_price is not None or arr_price is not None:
+        import json
+        status = {"isComplete": completed, "airlinesCodeMap": {}}
+        if dep_price is not None:
+            status["departure"] = {"price": {"min": dep_price}}
+        if arr_price is not None:
+            status["arrival"] = {"price": {"min": arr_price}}
+        body = {"status": status, "flights": flights or []}
+        m.iter_lines.return_value = _sse_lines([json.dumps(body)])
+    else:
+        m.iter_lines.return_value = []
+    return m
+
+
+def _domestic_flight(code, price, dep_time="0900", arr_time="1010", travel_date="20270802"):
+    return {
+        "segment": {
+            "airlineCode": code,
+            "departure": {"time": dep_time, "date": travel_date},
+            "arrival": {"time": arr_time, "date": travel_date},
+        },
+        "minFare": price,
+    }
 
 
 AIRPORT_ITEM = {"code": "ICN", "name": "인천", "type": "airport"}
@@ -328,6 +367,120 @@ class TestSearchFlightPrice:
         referer = mock_post.call_args.kwargs["headers"]["referer"]
         assert "ICN-NRT-20260901" in referer
         assert "NRT-ICN-20260908" in referer
+
+    def test_delegates_to_domestic_search_on_domestic_only_error(self):
+        with patch("nicknews.flights.requests.post", return_value=_domestic_error_response()), \
+             patch("nicknews.flights.search_domestic_flight_price", return_value={"price": 138500, "offers": []}) as mock_domestic:
+            fare = search_flight_price("ICN", "CJU", date(2027, 8, 2))
+        assert fare == {"price": 138500, "offers": []}
+        mock_domestic.assert_called_once_with("ICN", "CJU", date(2027, 8, 2), None)
+
+    def test_other_400_errors_do_not_delegate(self):
+        m = MagicMock()
+        m.status_code = 400
+        m.json.return_value = {"message": {"message": "some other validation error"}}
+        with patch("nicknews.flights.requests.post", return_value=m), \
+             patch("nicknews.flights.search_domestic_flight_price") as mock_domestic:
+            assert search_flight_price("ICN", "NRT", date(2026, 9, 1)) is None
+        mock_domestic.assert_not_called()
+
+
+# --- _is_domestic_only_error / _to_domestic_code ---
+
+class TestIsDomesticOnlyError:
+    def test_detects_domestic_only_message(self):
+        assert _is_domestic_only_error(_domestic_error_response()) is True
+
+    def test_other_message_returns_false(self):
+        m = MagicMock()
+        m.json.return_value = {"message": {"message": "Some other error"}}
+        assert _is_domestic_only_error(m) is False
+
+    def test_malformed_response_returns_false(self):
+        m = MagicMock()
+        m.json.side_effect = Exception("bad json")
+        assert _is_domestic_only_error(m) is False
+
+
+class TestToDomesticCode:
+    def test_icn_maps_to_sel(self):
+        assert _to_domestic_code("ICN") == "SEL"
+
+    def test_other_codes_unchanged(self):
+        assert _to_domestic_code("CJU") == "CJU"
+        assert _to_domestic_code("GMP") == "GMP"
+
+
+# --- _group_domestic_flights_by_airline ---
+
+class TestGroupDomesticFlightsByAirline:
+    def test_groups_by_airline_code(self):
+        flights = [_domestic_flight("KE", 100000), _domestic_flight("OZ", 90000)]
+        grouped = _group_domestic_flights_by_airline(flights)
+        assert set(grouped) == {"KE", "OZ"}
+
+    def test_sorts_and_limits_per_airline(self):
+        flights = [_domestic_flight("KE", p) for p in (300, 100, 200)]
+        grouped = _group_domestic_flights_by_airline(flights, max_per_airline=2)
+        assert [f["price"] for f in grouped["KE"]] == [100, 200]
+
+    def test_includes_time_label(self):
+        flights = [_domestic_flight("KE", 100000, dep_time="0900", arr_time="1010")]
+        grouped = _group_domestic_flights_by_airline(flights)
+        assert grouped["KE"][0]["label"] == "09:00→10:10"
+
+    def test_skips_entries_without_airline_or_price(self):
+        assert _group_domestic_flights_by_airline([{"segment": {}, "minFare": None}]) == {}
+
+
+# --- search_domestic_flight_price ---
+
+class TestSearchDomesticFlightPrice:
+    def test_normalizes_icn_to_sel(self):
+        with patch("nicknews.flights.requests.post", return_value=_domestic_sse_response(201, dep_price=138500)) as mock_post:
+            search_domestic_flight_price("ICN", "CJU", date(2027, 8, 2))
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["itineraries"][0]["departureAirport"] == "SEL"
+
+    def test_one_way_returns_price_and_offers(self):
+        flights = [_domestic_flight("KE", 138500)]
+        with patch("nicknews.flights.requests.post", return_value=_domestic_sse_response(201, dep_price=138500, flights=flights)):
+            fare = search_domestic_flight_price("GMP", "CJU", date(2027, 8, 2))
+        assert fare["price"] == 138500
+        assert fare["offers"][0]["airline"] == "KE"
+        assert fare["offers"][0]["return_label"] is None
+
+    def test_zero_departure_price_returns_none(self):
+        with patch("nicknews.flights.requests.post", return_value=_domestic_sse_response(201, dep_price=0)):
+            assert search_domestic_flight_price("GMP", "CJU", date(2027, 8, 2)) is None
+
+    def test_round_trip_sums_leg_prices(self):
+        dep_flights = [_domestic_flight("KE", 100000, "0900", "1010", "20270802")]
+        arr_flights = [_domestic_flight("KE", 120000, "1800", "1910", "20270810")]
+        responses = [
+            _domestic_sse_response(201, dep_price=100000, flights=dep_flights),
+            _domestic_sse_response(201, arr_price=120000, flights=arr_flights),
+        ]
+        with patch("nicknews.flights.requests.post", side_effect=responses):
+            fare = search_domestic_flight_price("GMP", "CJU", date(2027, 8, 2), date(2027, 8, 10))
+        assert fare["price"] == 220000
+        assert fare["offers"][0] == {
+            "airline": "KE", "price": 220000,
+            "depart_label": "09:00→10:10", "return_label": "18:00→19:10",
+        }
+
+    def test_round_trip_missing_return_leg_returns_none(self):
+        dep_flights = [_domestic_flight("KE", 100000)]
+        responses = [
+            _domestic_sse_response(201, dep_price=100000, flights=dep_flights),
+            _domestic_sse_response(201, arr_price=0),
+        ]
+        with patch("nicknews.flights.requests.post", side_effect=responses):
+            assert search_domestic_flight_price("GMP", "CJU", date(2027, 8, 2), date(2027, 8, 10)) is None
+
+    def test_request_error_returns_none(self):
+        with patch("nicknews.flights.requests.post", side_effect=Exception("timeout")):
+            assert search_domestic_flight_price("GMP", "CJU", date(2027, 8, 2)) is None
 
 
 class TestGetFlightPrice:

@@ -35,7 +35,11 @@ TRAVELPAYOUTS_TOKEN=<YOUR_TRAVELPAYOUTS_TOKEN>
 가격 조회 자체는 네이버 항공권(`flight.naver.com`)이 자체적으로 쓰는 내부 API를 이용한다 (KRW,
 실시간). 별도 키가 필요 없지만 **비공식 API**라 네이버가 예고 없이 형식을 바꾸거나 막을 수 있다 —
 `/addflight` 응답이 "현재가 조회 실패"만 계속 뜨면 `src/nicknews/flights.py`의
-`search_flight_price`를 확인해야 할 수 있다.
+`search_flight_price`/`search_domestic_flight_price`를 확인해야 할 수 있다.
+
+국제선·국내선(예: 인천-제주) 둘 다 지원한다 — 국제선 API가 "국내선 전용 노선"이라고 거부하면
+자동으로 국내선 API로 재시도한다. 국내선은 왕복 시 가는편·오는편 최저가를 각각 조회해 합산한다
+(국제선처럼 왕복 묶음 운임이 아니라 편도 운임을 독립적으로 조합).
 
 ### 3. 패키지 설치
 

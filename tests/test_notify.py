@@ -1,6 +1,7 @@
+from datetime import date
 from unittest.mock import call, patch
 
-from nicknews.notify import send_daily_news, send_kr_stocks, send_us_stocks
+from nicknews.notify import send_daily_news, send_flight_prices, send_kr_stocks, send_us_stocks
 
 
 class TestSendDailyNews:
@@ -156,3 +157,78 @@ class TestIntradayFiltering:
             send_kr_stocks(intraday=False)
         mock_send.assert_called_once()
         mock_sig.assert_not_called()
+
+
+class TestSendFlightPrices:
+    def _flight(self, history=None):
+        return {
+            "origin": "ICN", "origin_name": "인천", "destination": "NRT", "destination_name": "나리타",
+            "depart": "260901", "return": "260908", "history": history or [],
+        }
+
+    def test_skips_user_with_no_flights(self):
+        with patch("nicknews.notify.send_message") as mock_send, \
+             patch("nicknews.notify.save_user_stocks") as mock_save, \
+             patch("nicknews.notify.all_user_ids", return_value={"111"}), \
+             patch("nicknews.notify.load_user_stocks", return_value={"flights": []}):
+            send_flight_prices()
+        mock_send.assert_not_called()
+        mock_save.assert_not_called()
+
+    def test_sends_price_for_each_flight(self):
+        data = {"flights": [self._flight()]}
+        with patch("nicknews.notify.send_message", return_value={"ok": True}) as mock_send, \
+             patch("nicknews.notify.save_user_stocks"), \
+             patch("nicknews.notify.all_user_ids", return_value={"111"}), \
+             patch("nicknews.notify.load_user_stocks", return_value=data), \
+             patch("nicknews.notify.get_flight_price", return_value={"price": 380000, "offers": []}), \
+             patch("nicknews.notify.format_flight_price_message", return_value="✈️ 인천 → 나리타"):
+            send_flight_prices()
+        mock_send.assert_called_once()
+        assert mock_send.call_args[0][1] == "111"
+
+    def test_appends_today_to_history_and_saves(self):
+        data = {"flights": [self._flight()]}
+        with patch("nicknews.notify.send_message", return_value={"ok": True}), \
+             patch("nicknews.notify.save_user_stocks") as mock_save, \
+             patch("nicknews.notify.all_user_ids", return_value={"111"}), \
+             patch("nicknews.notify.load_user_stocks", return_value=data), \
+             patch("nicknews.notify.get_flight_price", return_value={"price": 380000, "offers": []}), \
+             patch("nicknews.flights.date") as mock_date:
+            mock_date.today.return_value = date(2026, 8, 29)
+            send_flight_prices()
+        saved_flight = mock_save.call_args[0][1]["flights"][0]
+        assert saved_flight["history"] == [{"date": "260829", "price": 380000}]
+
+    def test_overwrites_existing_entry_for_today(self):
+        data = {"flights": [self._flight(history=[{"date": "260829", "price": 400000}])]}
+        with patch("nicknews.notify.send_message", return_value={"ok": True}), \
+             patch("nicknews.notify.save_user_stocks") as mock_save, \
+             patch("nicknews.notify.all_user_ids", return_value={"111"}), \
+             patch("nicknews.notify.load_user_stocks", return_value=data), \
+             patch("nicknews.notify.get_flight_price", return_value={"price": 380000, "offers": []}), \
+             patch("nicknews.flights.date") as mock_date:
+            mock_date.today.return_value = date(2026, 8, 29)
+            send_flight_prices()
+        history = mock_save.call_args[0][1]["flights"][0]["history"]
+        assert history == [{"date": "260829", "price": 380000}]
+
+    def test_price_lookup_failure_skips_send_and_save(self):
+        data = {"flights": [self._flight()]}
+        with patch("nicknews.notify.send_message") as mock_send, \
+             patch("nicknews.notify.save_user_stocks") as mock_save, \
+             patch("nicknews.notify.all_user_ids", return_value={"111"}), \
+             patch("nicknews.notify.load_user_stocks", return_value=data), \
+             patch("nicknews.notify.get_flight_price", return_value=None):
+            send_flight_prices()
+        mock_send.assert_not_called()
+        mock_save.assert_not_called()
+
+    def test_sends_to_given_chat_id_only(self):
+        data = {"flights": [self._flight()]}
+        with patch("nicknews.notify.send_message", return_value={"ok": True}) as mock_send, \
+             patch("nicknews.notify.save_user_stocks"), \
+             patch("nicknews.notify.load_user_stocks", return_value=data), \
+             patch("nicknews.notify.get_flight_price", return_value={"price": 380000, "offers": []}):
+            send_flight_prices(chat_id="222")
+        assert mock_send.call_args[0][1] == "222"

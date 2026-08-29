@@ -23,10 +23,10 @@ def owner_env(monkeypatch):
 class TestLoadUserStocks:
     def test_returns_defaults_when_file_missing(self, stocks_file):
         result = load_user_stocks("111")
-        assert result == {"kr": [], "us": [], "keywords": []}
+        assert result == {"kr": [], "us": [], "keywords": [], "flights": []}
 
     def test_returns_user_data(self, stocks_file):
-        data = {"111": {"kr": [{"name": "삼성전자", "ticker": "005930.KS"}], "us": [], "keywords": ["AI"]}}
+        data = {"111": {"kr": [{"name": "삼성전자", "ticker": "005930.KS"}], "us": [], "keywords": ["AI"], "flights": []}}
         stocks_file.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         assert load_user_stocks("111") == data["111"]
 
@@ -52,10 +52,15 @@ class TestLoadUserStocks:
         result = load_user_stocks("111")
         assert result["keywords"] == []
 
+    def test_adds_empty_flights_when_missing(self, stocks_file):
+        stocks_file.write_text(json.dumps({"111": {"kr": [], "us": [], "keywords": []}}), encoding="utf-8")
+        result = load_user_stocks("111")
+        assert result["flights"] == []
+
 
 class TestSaveUserStocks:
     def test_saved_data_can_be_read_back(self, stocks_file):
-        data = {"kr": [{"name": "삼성전자", "ticker": "005930.KS"}], "us": [], "keywords": []}
+        data = {"kr": [{"name": "삼성전자", "ticker": "005930.KS"}], "us": [], "keywords": [], "flights": []}
         save_user_stocks("111", data)
         assert load_user_stocks("111") == data
 

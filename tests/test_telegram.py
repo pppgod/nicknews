@@ -1,6 +1,5 @@
+from datetime import date, timedelta
 from unittest.mock import patch
-
-import pytest
 
 from nicknews.commands import (
     cmd_add,
@@ -30,6 +29,16 @@ def _default_flight_data():
 
 def _messages(mock_send):
     return [call[0][0] for call in mock_send.call_args_list]
+
+
+def _future_yymmdd(days):
+    """오늘로부터 days일 뒤 날짜의 yymmdd 문자열. addflight가 과거 날짜를 거부하므로
+    테스트는 고정 날짜 대신 항상 미래 날짜를 써야 한다."""
+    return (date.today() + timedelta(days=days)).strftime("%y%m%d")
+
+
+_DEPART = _future_yymmdd(30)
+_RETURN = _future_yymmdd(37)
 
 
 class TestCmdAdd:
@@ -293,18 +302,18 @@ class TestCmdAddflight:
 
     def test_invalid_return_date_sends_error(self):
         with patch("nicknews.commands.send_message") as mock_send:
-            cmd_addflight(["/addflight", "인천", "도쿄", "260901", "abc"])
+            cmd_addflight(["/addflight", "인천", "도쿄", _DEPART, "abc"])
         assert any("오는 날짜" in m for m in _messages(mock_send))
 
     def test_return_before_depart_rejected(self):
         with patch("nicknews.commands.send_message") as mock_send:
-            cmd_addflight(["/addflight", "인천", "도쿄", "260908", "260901"])
+            cmd_addflight(["/addflight", "인천", "도쿄", _RETURN, _DEPART])
         assert any("가는 날짜보다 빠릅니다" in m for m in _messages(mock_send))
 
     def test_airport_not_found_sends_error(self):
         with patch("nicknews.commands.send_message") as mock_send, \
              patch("nicknews.commands.resolve_route", return_value=None):
-            cmd_addflight(["/addflight", "없는곳", "도쿄", "260901"])
+            cmd_addflight(["/addflight", "없는곳", "도쿄", _DEPART])
         assert any("공항을 찾을 수 없습니다" in m for m in _messages(mock_send))
 
     def test_success_saves_flight_and_history(self):
@@ -313,13 +322,13 @@ class TestCmdAddflight:
              patch("nicknews.commands.get_flight_price", return_value={"price": 380000, "offers": []}), \
              patch("nicknews.commands.load_user_stocks", return_value=_default_flight_data()), \
              patch("nicknews.commands.save_user_stocks") as mock_save:
-            cmd_addflight(["/addflight", "인천", "도쿄", "260901", "260908"])
+            cmd_addflight(["/addflight", "인천", "도쿄", _DEPART, _RETURN])
         saved = mock_save.call_args[0][1]
         flight = saved["flights"][0]
         assert flight["origin"] == "ICN"
         assert flight["destination"] == "NRT"
-        assert flight["depart"] == "260901"
-        assert flight["return"] == "260908"
+        assert flight["depart"] == _DEPART
+        assert flight["return"] == _RETURN
         assert flight["history"] == [{"date": flight["history"][0]["date"], "price": 380000}]
 
     def test_one_way_has_no_return(self):
@@ -328,7 +337,7 @@ class TestCmdAddflight:
              patch("nicknews.commands.get_flight_price", return_value={"price": 100000, "offers": []}), \
              patch("nicknews.commands.load_user_stocks", return_value=_default_flight_data()), \
              patch("nicknews.commands.save_user_stocks") as mock_save:
-            cmd_addflight(["/addflight", "인천", "도쿄", "260901"])
+            cmd_addflight(["/addflight", "인천", "도쿄", _DEPART])
         assert mock_save.call_args[0][1]["flights"][0]["return"] is None
 
     def test_price_lookup_failure_still_saves_without_history(self):
@@ -337,7 +346,7 @@ class TestCmdAddflight:
              patch("nicknews.commands.get_flight_price", return_value=None), \
              patch("nicknews.commands.load_user_stocks", return_value=_default_flight_data()), \
              patch("nicknews.commands.save_user_stocks") as mock_save:
-            cmd_addflight(["/addflight", "인천", "도쿄", "260901"])
+            cmd_addflight(["/addflight", "인천", "도쿄", _DEPART])
         assert mock_save.call_args[0][1]["flights"][0]["history"] == []
         assert any("조회 실패" in m for m in _messages(mock_send))
 

@@ -125,15 +125,15 @@ def _naver_payload(origin, destination, depart_date: date, return_date: date = N
         "tripType": "RT" if return_date else "OW",
         "device": "pc", "seatClass": "Y",
         "adultCount": 1, "childCount": 0, "infantCount": 0,
-        "isNonstop": False, "openReturnDays": 0, "initialRequest": True,
+        "isNonstop": True, "openReturnDays": 0, "initialRequest": True,
         "itineraries": itineraries,
         "flightFilter": {
             "filter": {
                 "airlines": [], "departureAirports": [], "arrivalAirports": [],
                 "departureTime": [], "fareTypes": [], "flightDurationSeconds": [],
                 "hasCardBenefit": True, "isIndividual": False, "isLowCarbonEmission": False,
-                "isSameAirlines": False, "isSameDepArrAirport": True, "isTravelClub": False,
-                "minFare": {}, "viaCount": [], "selectedItineraries": [],
+                "isSameAirlines": True, "isSameDepArrAirport": True, "isTravelClub": False,
+                "minFare": {}, "viaCount": [0], "selectedItineraries": [],
             },
             "limit": 200, "skip": 0, "sort": {"adultMinFare": 1},
         },
@@ -144,7 +144,7 @@ def _naver_referer(origin, destination, depart_date: date, return_date: date = N
     path = f"{origin}-{destination}-{depart_date.strftime('%Y%m%d')}"
     if return_date:
         path += f"/{destination}-{origin}-{return_date.strftime('%Y%m%d')}"
-    return f"https://flight.naver.com/flights/international/{path}?adult=1&isDirect=false&fareType=Y"
+    return f"https://flight.naver.com/flights/international/{path}?adult=1&isDirect=true&fareType=Y"
 
 
 PRIORITY_AIRLINE_CODE = "KE"  # 대한항공 — 항공사 정렬 시 최우선 표시
@@ -170,6 +170,14 @@ def _itinerary_time_label(itinerary):
     return label
 
 
+def _itinerary_airline_code(itinerary):
+    """편도 조합 첫 구간의 마케팅 항공사 코드. 정보 없으면 None."""
+    segments = (itinerary or {}).get("segments")
+    if not segments:
+        return None
+    return segments[0].get("marketingCarrier", {}).get("airlineCode")
+
+
 def _extract_fare_offers(data):
     """SSE 최종 이벤트 -> {"price": 전체 최저가, "offers": [...]}. 가격 정보 없으면 None.
     offers는 항공사별 최저가 상위 MAX_OFFERS_PER_AIRLINE개씩, PRIORITY_AIRLINE_CODE(대한항공)를
@@ -192,6 +200,9 @@ def _extract_fare_offers(data):
             continue
         code = segments[0].get("marketingCarrier", {}).get("airlineCode")
         if not code:
+            continue
+        # 왕복은 가는편·오는편 항공사가 같은 상품만 노출한다.
+        if inbound and _itinerary_airline_code(inbound) != code:
             continue
         for fare in mapping.get("fares", []):
             adult = fare.get("adult", {})

@@ -278,6 +278,22 @@ class TestExtractFareOffers:
         assert len(offers) == 2
         assert [o["price"] for o in offers] == [700000, 800000]  # 저가순 상위 2개
 
+    def test_round_trip_with_mismatched_airlines_is_dropped(self):
+        data = {
+            "status": {"priceRange": {"min": 500000}, "airlinesCodeMap": {"KE": "대한항공", "OZ": "아시아나항공"}},
+            "itineraries": [
+                {"itineraryId": "out", "segments": [{"marketingCarrier": {"airlineCode": "KE"}}]},
+                {"itineraryId": "in_same", "segments": [{"marketingCarrier": {"airlineCode": "KE"}}]},
+                {"itineraryId": "in_diff", "segments": [{"marketingCarrier": {"airlineCode": "OZ"}}]},
+            ],
+            "fareMappings": [
+                {"itineraryIds": "out-in_diff", "fares": [{"adult": {"totalFare": 500000}}]},
+                {"itineraryIds": "out-in_same", "fares": [{"adult": {"totalFare": 900000}}]},
+            ],
+        }
+        offers = _extract_fare_offers(data)["offers"]
+        assert [o["price"] for o in offers] == [900000]  # 같은 항공사 왕복만 남음
+
     def test_no_fare_mappings_returns_empty_offers(self):
         data = {"status": {"priceRange": {"min": 100000}, "airlinesCodeMap": {}}, "itineraries": [], "fareMappings": []}
         assert _extract_fare_offers(data) == {"price": 100000, "offers": []}
@@ -344,6 +360,14 @@ class TestSearchFlightPrice:
         assert payload["tripType"] == "RT"
         assert len(payload["itineraries"]) == 2
         assert payload["itineraries"][1]["departureLocationCode"] == "NRT"
+
+    def test_searches_direct_flights_only(self):
+        with patch("nicknews.flights.requests.post", return_value=_naver_response(201, price=70500)) as mock_post:
+            search_flight_price("ICN", "NRT", date(2026, 9, 1))
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["isNonstop"] is True
+        assert payload["flightFilter"]["filter"]["viaCount"] == [0]
+        assert payload["flightFilter"]["filter"]["isSameAirlines"] is True
 
     def test_non_2xx_status_returns_none(self):
         with patch("nicknews.flights.requests.post", return_value=_naver_response(503)):

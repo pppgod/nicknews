@@ -198,11 +198,13 @@ def _extract_fare_offers(data):
         segments = (outbound or {}).get("segments")
         if not segments:
             continue
-        code = segments[0].get("marketingCarrier", {}).get("airlineCode")
+        code = _itinerary_airline_code(outbound)
         if not code:
             continue
         # 왕복은 가는편·오는편 항공사가 같은 상품만 노출한다.
-        if inbound and _itinerary_airline_code(inbound) != code:
+        # (오는편 항공사 정보가 아예 없으면 판단 불가 → 버리지 않고 통과시킨다.)
+        inbound_code = _itinerary_airline_code(inbound)
+        if inbound_code and inbound_code != code:
             continue
         for fare in mapping.get("fares", []):
             adult = fare.get("adult", {})
@@ -230,7 +232,10 @@ def _extract_fare_offers(data):
         for o in by_airline[code]:
             offers.append({"airline": name, **o})
 
-    return {"price": overall_min, "offers": offers}
+    # 노출되는 최저가는 실제로 살 수 있는(직항·동일 항공사) offer 기준으로 맞춘다.
+    # priceRange.min은 필터 전 전체 최저가라, 이력에 기록되는 값과 offer 목록이 어긋날 수 있다.
+    headline = min((o["price"] for o in offers), default=overall_min)
+    return {"price": headline, "offers": offers}
 
 
 def _read_sse(res, completed_key):

@@ -291,8 +291,23 @@ class TestExtractFareOffers:
                 {"itineraryIds": "out-in_same", "fares": [{"adult": {"totalFare": 900000}}]},
             ],
         }
+        result = _extract_fare_offers(data)
+        assert [o["price"] for o in result["offers"]] == [900000]  # 같은 항공사 왕복만 남음
+        assert result["price"] == 900000  # 노출 최저가도 살 수 있는 offer 기준으로 맞춤
+
+    def test_round_trip_keeps_fare_when_inbound_airline_unknown(self):
+        data = {
+            "status": {"priceRange": {"min": 500000}, "airlinesCodeMap": {"KE": "대한항공"}},
+            "itineraries": [
+                {"itineraryId": "out", "segments": [{"marketingCarrier": {"airlineCode": "KE"}}]},
+                {"itineraryId": "in", "segments": [{}]},  # 오는편 항공사 정보 없음
+            ],
+            "fareMappings": [
+                {"itineraryIds": "out-in", "fares": [{"adult": {"totalFare": 500000}}]},
+            ],
+        }
         offers = _extract_fare_offers(data)["offers"]
-        assert [o["price"] for o in offers] == [900000]  # 같은 항공사 왕복만 남음
+        assert [o["price"] for o in offers] == [500000]
 
     def test_no_fare_mappings_returns_empty_offers(self):
         data = {"status": {"priceRange": {"min": 100000}, "airlinesCodeMap": {}}, "itineraries": [], "fareMappings": []}
